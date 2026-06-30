@@ -1,0 +1,13 @@
+{
+  "name": "zqlite",
+  "version": "0.1.0",
+  "description": "Schema-first SQLite for Bun. Write Zod schemas once — get DDL, TypeScript types, and validated queries.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "peerDependencies": {
+    "zod": "^4.0.0"
+  },
+  "private": true
+}
