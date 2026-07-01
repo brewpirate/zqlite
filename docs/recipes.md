@@ -192,8 +192,8 @@ zqlite isn't coupled to a driver — it works with anything satisfying
 |---|---|
 | [`bun:sqlite`](https://bun.sh/docs/api/sqlite) | `new Database(path)` directly — no wrapper. **Tested in CI (Bun).** |
 | [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3) | Set `paramPrefix: ''` (it expects bare keys, not `$name`). **Tested in CI (Node); not supported under Bun.** |
-| `node:sqlite` (Node 22+) | Needs a thin wrapper — no `.transaction()` method. **Tested in CI (Node 22 & 24).** |
-| [`libsql`](https://github.com/tursodatabase/libsql) (local) | Needs a thin wrapper — `paramPrefix: ''` and strip its injected `_metadata`. **Tested in CI (Bun & Node).** Local only — see note below. |
+| [`node:sqlite`](https://nodejs.org/docs/latest/api/sqlite.html) (Node 22+) | Needs a thin wrapper — no `.transaction()` method. **Tested in CI (Node 22 & 24).** |
+| [`libsql`](https://github.com/tursodatabase/libsql) (local, sync) | Needs a thin wrapper — `paramPrefix: ''` and strip its injected `_metadata`. **Tested in CI (Bun & Node).** This is the *local* driver; for remote **Turso cloud** use the async API (see [turso.md](./turso.md)). |
 
 **better-sqlite3** — without `paramPrefix: ''` every named parameter silently
 binds NULL (no error, wrong results):
@@ -272,6 +272,10 @@ This covers **local** libsql databases (synchronous). For Turso **cloud** —
 remote over HTTP — use the async API with `@libsql/client`, below.
 
 ## Async & Turso cloud
+
+The condensed version is below; the full walkthrough — credentials (database vs
+platform tokens), local dev, latency — is in the [Turso cloud guide](./turso.md),
+with a runnable [`examples/07-turso-cloud.ts`](../examples/07-turso-cloud.ts).
 
 Remote Turso is asynchronous, so it uses a parallel async surface:
 `defineAsyncQuery`, `defineAsyncWrite`, and `execWriteAsync`. They share the same
