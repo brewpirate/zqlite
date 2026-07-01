@@ -78,8 +78,12 @@ dependency).
 | Driver | Status | Notes |
 |---|---|---|
 | [`bun:sqlite`](https://bun.sh/docs/api/sqlite) | **Tested** | Pass `new Database(path)` directly |
-| [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3) | Compatible | Set `paramPrefix: ''` on the connection |
-| `node:sqlite` (Node 22+) | Compatible | Needs a thin wrapper (no `.transaction()`) |
+| [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3) | **Tested** | Set `paramPrefix: ''` on the connection |
+| [`node:sqlite`](https://nodejs.org/docs/latest/api/sqlite.html) (Node 22+) | **Tested** | Needs a thin wrapper (no `.transaction()`) |
+
+All three drivers run the same integration suite in CI: `bun:sqlite` under Bun,
+`better-sqlite3` and `node:sqlite` under Node 22 and 24. (`better-sqlite3` is
+Node-only — Bun does not support its native addon.)
 
 Driver setup details are in
 [recipes.md → Multiple drivers](./docs/recipes.md#multiple-drivers).

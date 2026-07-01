@@ -1,8 +1,8 @@
 import type { z } from 'zod'
-import { QueryValidationError } from './errors'
-import { buildRowCoercer, prefixParamKeys } from './internal'
-import { serializeRow } from './serialize'
-import type { SqliteAdapter } from './types'
+import { QueryValidationError } from './errors.js'
+import { buildRowCoercer, prefixParamKeys } from './internal.js'
+import { serializeRow } from './serialize.js'
+import type { SqliteAdapter } from './types.js'
 
 /**
  * Options for {@link defineQuery}. Binds the database connection and schemas
@@ -71,6 +71,11 @@ export function defineQuery<
   const coerceRow = buildRowCoercer(resultSchema)
   const paramPrefix = db.paramPrefix ?? '$'
 
+  /**
+   * Coerces then Zod-validates a single result row, wrapping any validation
+   * failure in a {@link QueryValidationError} that carries the SQL and the row
+   * index so a corrupt row in an `.all()` result is easy to locate.
+   */
   function parseResult(row: unknown, rowIndex?: number): z.infer<ResultSchema> {
     const coerced = coerceRow(row as Record<string, unknown>)
     try {

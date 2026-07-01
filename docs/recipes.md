@@ -181,9 +181,9 @@ zqlite isn't coupled to a driver — it works with anything satisfying
 
 | Driver | Setup |
 |---|---|
-| [`bun:sqlite`](https://bun.sh/docs/api/sqlite) | `new Database(path)` directly — no wrapper. **Tested in CI.** |
-| [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3) | Set `paramPrefix: ''` (it expects bare keys, not `$name`). |
-| `node:sqlite` (Node 22+) | Needs a thin wrapper — no `.transaction()` method. |
+| [`bun:sqlite`](https://bun.sh/docs/api/sqlite) | `new Database(path)` directly — no wrapper. **Tested in CI (Bun).** |
+| [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3) | Set `paramPrefix: ''` (it expects bare keys, not `$name`). **Tested in CI (Node); not supported under Bun.** |
+| `node:sqlite` (Node 22+) | Needs a thin wrapper — no `.transaction()` method. **Tested in CI (Node 22 & 24).** |
 
 **better-sqlite3** — without `paramPrefix: ''` every named parameter silently
 binds NULL (no error, wrong results):

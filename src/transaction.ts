@@ -1,5 +1,5 @@
-import { TransactionRollbackError } from './errors'
-import type { SqliteAdapter } from './types'
+import { TransactionRollbackError } from './errors.js'
+import type { SqliteAdapter } from './types.js'
 
 /**
  * Wraps a write in `BEGIN IMMEDIATE` so concurrent writers queue on the

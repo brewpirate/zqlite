@@ -1,0 +1,73 @@
+name: test
+
+# Runs the test suites across both runtimes zqlite supports. The driver-parity
+# integration suite is sparse by runtime — each job exercises only the drivers
+# its runtime can host:
+#
+#   Bun job   -> bun:sqlite          (via `bun test`, alongside the unit suite)
+#   Node job  -> better-sqlite3 + node:sqlite  (via `node --import tsx --test`)
+#
+# better-sqlite3 is intentionally a Node-only cell: Bun rejects its native addon
+# at construction, so the adapter registry skips it under Bun automatically.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  bun:
+    name: bun (bun:sqlite)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      # `bun test` runs the comprehensive unit suite plus the Bun integration
+      # entry (tests/integration/bun.test.ts).
+      - run: bun test
+
+  node:
+    name: node ${{ matrix.node-version }} (better-sqlite3 + node:sqlite)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Lower bound from package.json engines (>=22) and current LTS.
+        node-version: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      # Bun installs deps (the repo's lockfile is bun.lock); the Node integration
+      # run itself launches `node`, not Bun — bun run only shells out to it.
+      - run: bun install --frozen-lockfile
+      - run: bun run test:node
+
+  node-dist:
+    name: node ${{ matrix.node-version }} (dist artifact)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - run: bun install --frozen-lockfile
+      # Builds, runs a plain-node load check (no tsx — proves the published
+      # artifact loads as shipped), then runs the parity suite against dist/
+      # imported by package name (exercises the exports map, not the source).
+      - run: bun run test:node:dist

@@ -4,9 +4,9 @@ import {
   NestedTypeError,
   UnsupportedDefaultError,
   UnsupportedZodTypeError,
-} from './errors'
-import { VALID_IDENTIFIER } from './identifiers'
-import { isJsonColumn } from './json'
+} from './errors.js'
+import { VALID_IDENTIFIER } from './identifiers.js'
+import { isJsonColumn } from './json.js'
 
 /**
  * Options for {@link zodToSqliteDDL}.

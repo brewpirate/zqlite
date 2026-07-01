@@ -1,13 +1,13 @@
-export { zSqliteBool } from './bool'
-export type { ConfigureZqliteAdapterOpts } from './configure'
-export { configureZqliteAdapter } from './configure'
-export type { ZodToSqliteDDLOpts } from './ddl'
-export { zodToSqliteDDL } from './ddl'
+export { zSqliteBool } from './bool.js'
+export type { ConfigureZqliteAdapterOpts } from './configure.js'
+export { configureZqliteAdapter } from './configure.js'
+export type { ZodToSqliteDDLOpts } from './ddl.js'
+export { zodToSqliteDDL } from './ddl.js'
 export type {
   DefineDynamicQueryOptions,
   DynamicQueryHandle,
-} from './dynamic'
-export { defineDynamicQuery } from './dynamic'
+} from './dynamic.js'
+export { defineDynamicQuery } from './dynamic.js'
 export {
   ColumnTypeMismatchError,
   DuplicateMigrationVersionError,
@@ -20,22 +20,22 @@ export {
   UnsupportedDefaultError,
   UnsupportedZodTypeError,
   ZqliteError,
-} from './errors'
+} from './errors.js'
 export {
   getJsonColumnSchema,
   isJsonColumn,
   zJsonArray,
   zJsonSchema,
-} from './json'
-export type { Migration, MigrationStep } from './migrate'
+} from './json.js'
+export type { Migration, MigrationStep } from './migrate.js'
 export {
   migrate,
   migrateAddColumn,
   migrateDropColumn,
   migrateRenameColumn,
-} from './migrate'
-export type { DefineQueryOptions, QueryHandle } from './query'
-export { defineQuery } from './query'
+} from './migrate.js'
+export type { DefineQueryOptions, QueryHandle } from './query.js'
+export { defineQuery } from './query.js'
 export type {
   InsertField,
   InsertShape,
@@ -43,19 +43,23 @@ export type {
   RefineFunction,
   UpdateField,
   UpdateShape,
-} from './schema'
+} from './schema.js'
 export {
   createInsertSchema,
   createSelectSchema,
   createUpdateSchema,
-} from './schema'
+} from './schema.js'
 
-export { execWrite } from './transaction'
+export { execWrite } from './transaction.js'
 
-export type { SqliteAdapter, SqliteRunResult, SqliteStatement } from './types'
+export type {
+  SqliteAdapter,
+  SqliteRunResult,
+  SqliteStatement,
+} from './types.js'
 export type {
   DefineWriteOptions,
   WriteHandle,
   WriteResult,
-} from './write'
-export { defineWrite } from './write'
+} from './write.js'
+export { defineWrite } from './write.js'

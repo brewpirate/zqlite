@@ -25,6 +25,8 @@ import {
   zJsonArray,
   zJsonSchema,
   zSqliteBool,
+  type SqliteAdapter,
+  type WriteHandle,
 } from '../src/index'
 import { VALID_IDENTIFIER } from '../src/identifiers'
 import { serializeRow, serializeValue } from '../src/serialize'
@@ -46,9 +48,9 @@ function _typeBoundChecksNeverCalled(): void {
   defineQuery({ db, params: z.string(), result: z.object({}), sql: 'SELECT 1' })
   // @ts-expect-error — params must be ZodObject<ZodRawShape>, not z.number()
   defineQuery({ db, params: z.number(), result: z.object({}), sql: 'SELECT 1' })
-  // @ts-expect-error — params must be ZodObject, not a discriminated union of objects
   defineQuery({
     db,
+    // @ts-expect-error — params must be ZodObject, not a discriminated union of objects
     params: z.union([z.object({ a: z.string() }), z.object({ b: z.number() })]),
     result: z.object({}),
     sql: 'SELECT 1',
@@ -344,7 +346,9 @@ describe('zodToSqliteDDL', () => {
   })
 
   test('throws UnsupportedDefaultError for Infinity numeric default', () => {
-    const schema = z.object({ ratio: z.number().default(Number.POSITIVE_INFINITY) })
+    const schema = z.object({
+      ratio: z.number().default(Number.POSITIVE_INFINITY),
+    })
     expect(() => zodToSqliteDDL({ table: 'items', schema })).toThrow(
       /non-finite number/,
     )
@@ -389,7 +393,7 @@ describe('zodToSqliteDDL', () => {
   })
 
   test("escapes embedded single quotes in z.enum() values per SQLite's doubled-quote rule", () => {
-    const schema = z.object({ phrase: z.enum(["it's", "ok"]) })
+    const schema = z.object({ phrase: z.enum(["it's", 'ok']) })
     const ddl = zodToSqliteDDL({ table: 'items', schema })
     expect(ddl).toContain("CHECK(phrase IN ('it''s', 'ok'))")
     // And the result is valid SQL — SQLite accepts the table.
@@ -404,7 +408,9 @@ describe('zodToSqliteDDL', () => {
   })
 
   test('emits TEXT for zJsonSchema columns', () => {
-    const schema = z.object({ metadata: zJsonSchema(z.object({ value: z.number() })) })
+    const schema = z.object({
+      metadata: zJsonSchema(z.object({ value: z.number() })),
+    })
     const ddl = zodToSqliteDDL({ table: 'items', schema })
     expect(ddl).toContain('metadata TEXT')
   })
@@ -418,36 +424,54 @@ describe('zodToSqliteDDL', () => {
 
   test('emits table-level PRIMARY KEY for composite key', () => {
     const schema = z.object({ a: z.string(), b: z.string() })
-    const ddl = zodToSqliteDDL({ table: 'items', schema, primaryKey: ['a', 'b'] })
+    const ddl = zodToSqliteDDL({
+      table: 'items',
+      schema,
+      primaryKey: ['a', 'b'],
+    })
     expect(ddl).toContain('PRIMARY KEY (a, b)')
   })
 
   test('throws on invalid table name', () => {
     const schema = z.object({ id: z.string() })
-    expect(() => zodToSqliteDDL({ table: 'bad-name', schema })).toThrow('Invalid table name')
+    expect(() => zodToSqliteDDL({ table: 'bad-name', schema })).toThrow(
+      'Invalid table name',
+    )
   })
 
   test('throws NestedTypeError on z.object() column without zJsonSchema', () => {
     const schema = z.object({ nested: z.object({ x: z.number() }) })
-    expect(() => zodToSqliteDDL({ table: 'items', schema })).toThrow(NestedTypeError)
-    expect(() => zodToSqliteDDL({ table: 'items', schema })).toThrow('Use zJsonSchema()')
+    expect(() => zodToSqliteDDL({ table: 'items', schema })).toThrow(
+      NestedTypeError,
+    )
+    expect(() => zodToSqliteDDL({ table: 'items', schema })).toThrow(
+      'Use zJsonSchema()',
+    )
   })
 
   test('throws NestedTypeError on bare z.array() column', () => {
     const schema = z.object({ tags: z.array(z.string()) })
-    expect(() => zodToSqliteDDL({ table: 'items', schema })).toThrow(NestedTypeError)
+    expect(() => zodToSqliteDDL({ table: 'items', schema })).toThrow(
+      NestedTypeError,
+    )
     expect(() => zodToSqliteDDL({ table: 'items', schema })).toThrow('"tags"')
   })
 
   test('integer column affinity is correct end-to-end via PRAGMA', () => {
-    const schema = z.object({ id: z.string(), count: z.number().int(), score: z.number() })
+    const schema = z.object({
+      id: z.string(),
+      count: z.number().int(),
+      score: z.number(),
+    })
     db.run(zodToSqliteDDL({ table: 'things', schema, primaryKey: ['id'] }))
     const columns = db
       .query<{ name: string; type: string }, []>('PRAGMA table_info(things)')
       .all()
-    const columnTypes = Object.fromEntries(columns.map((columnInfo) => [columnInfo.name, columnInfo.type]))
-    expect(columnTypes['count']).toBe('INTEGER')
-    expect(columnTypes['score']).toBe('REAL')
+    const columnTypes = Object.fromEntries(
+      columns.map((columnInfo) => [columnInfo.name, columnInfo.type]),
+    )
+    expect(columnTypes.count).toBe('INTEGER')
+    expect(columnTypes.score).toBe('REAL')
   })
 
   test('generates valid DDL that SQLite accepts', () => {
@@ -481,8 +505,12 @@ function seedNotes() {
     done INTEGER NOT NULL,
     created_at TEXT NOT NULL
   )`)
-  db.run(`INSERT INTO notes VALUES (1, 'Buy milk', 0, '2026-01-01T00:00:00.000Z')`)
-  db.run(`INSERT INTO notes VALUES (2, 'Write tests', 1, '2026-01-02T00:00:00.000Z')`)
+  db.run(
+    `INSERT INTO notes VALUES (1, 'Buy milk', 0, '2026-01-01T00:00:00.000Z')`,
+  )
+  db.run(
+    `INSERT INTO notes VALUES (2, 'Write tests', 1, '2026-01-02T00:00:00.000Z')`,
+  )
 }
 
 /**
@@ -494,7 +522,7 @@ function seedNotes() {
  * all of them together. Closes over the module-level `db`, which `beforeEach`
  * reassigns before each test.
  */
-function defineFindNoteById(): QueryHandle<{ id: number }, z.infer<typeof NoteSchema>> {
+function defineFindNoteById() {
   return defineQuery({
     db,
     params: z.object({ id: z.number().int() }),
@@ -510,10 +538,7 @@ function defineFindNoteById(): QueryHandle<{ id: number }, z.infer<typeof NoteSc
  * column of the `notes` table {@link seedNotes} creates, so a column change
  * must update this factory and the seed together.
  */
-function defineInsertNote(): QueryHandle<
-  { id: number; title: string; done: boolean; created_at: Date },
-  Record<string, never>
-> {
+function defineInsertNote() {
   return defineQuery({
     db,
     params: z.object({
@@ -612,7 +637,7 @@ function createThingsTable(): void {
  * inline `defineQuery` blocks; couples on the shared `things` table shape via
  * {@link StatusSchema}.
  */
-function defineFindThingById(): QueryHandle<{ id: number }, z.infer<typeof StatusSchema>> {
+function defineFindThingById() {
   return defineQuery({
     db,
     params: z.object({ id: z.number().int() }),
@@ -683,16 +708,30 @@ describe('defineQuery — .run()', () => {
   test('inserts a row and it is retrievable', () => {
     seedNotes()
     const insertNote = defineInsertNote()
-    insertNote.run({ id: 3, title: 'Third note', done: false, created_at: new Date('2026-01-03T00:00:00.000Z') })
-    const row = db.query('SELECT * FROM notes WHERE id = 3').get() as { title: string }
+    insertNote.run({
+      id: 3,
+      title: 'Third note',
+      done: false,
+      created_at: new Date('2026-01-03T00:00:00.000Z'),
+    })
+    const row = db.query('SELECT * FROM notes WHERE id = 3').get() as {
+      title: string
+    }
     expect(row.title).toBe('Third note')
   })
 
   test('serializes boolean param to 0/1', () => {
     seedNotes()
     const insertNote = defineInsertNote()
-    insertNote.run({ id: 4, title: 'Done note', done: true, created_at: new Date() })
-    const row = db.query('SELECT done FROM notes WHERE id = 4').get() as { done: number }
+    insertNote.run({
+      id: 4,
+      title: 'Done note',
+      done: true,
+      created_at: new Date(),
+    })
+    const row = db.query('SELECT done FROM notes WHERE id = 4').get() as {
+      done: number
+    }
     expect(row.done).toBe(1)
   })
 })
@@ -712,7 +751,7 @@ describe('defineQuery — .run()', () => {
  */
 function defineSelectItemById<RowSchema extends z.ZodObject>(
   resultRowSchema: RowSchema,
-): QueryHandle<{ id: number }, z.infer<RowSchema>> {
+) {
   return defineQuery({
     db,
     params: z.object({ id: z.number().int() }),
@@ -723,7 +762,10 @@ function defineSelectItemById<RowSchema extends z.ZodObject>(
 
 describe('zJsonSchema', () => {
   test('round-trips a JSON object column through defineQuery', () => {
-    const MetaSchema = z.object({ version: z.number(), tags: z.array(z.string()) })
+    const MetaSchema = z.object({
+      version: z.number(),
+      tags: z.array(z.string()),
+    })
     const RowSchema = z.object({
       id: z.number().int(),
       meta: zJsonSchema(MetaSchema),
@@ -752,7 +794,9 @@ describe('zJsonSchema', () => {
     db.run(`INSERT INTO items VALUES (1, '{"version":"not-a-number"}')`)
 
     const select = defineSelectItemById(RowSchema)
-    expect(() => select.one({ id: 1 })).toThrow('Query result validation failed')
+    expect(() => select.one({ id: 1 })).toThrow(
+      'Query result validation failed',
+    )
   })
 
   test('returns defaultValue when stored value is empty string', () => {
@@ -791,7 +835,10 @@ describe('zJsonArray', () => {
   })
 
   test('returns default empty array for empty string stored value', () => {
-    const RowSchema = z.object({ id: z.number().int(), tags: zJsonArray<string>() })
+    const RowSchema = z.object({
+      id: z.number().int(),
+      tags: zJsonArray<string>(),
+    })
     db.run('CREATE TABLE items (id INTEGER PRIMARY KEY, tags TEXT NOT NULL)')
     db.run(`INSERT INTO items VALUES (1, '')`)
 
@@ -896,7 +943,9 @@ function _zSqliteBoolTypeCheckNeverCalled(): void {
 describe('createSelectSchema', () => {
   test('preserves the base shape unchanged', () => {
     const schema = createSelectSchema(BaseSchema)
-    expect(schema.parse({ id: 'a', label: 'foo', score: null, active: true })).toEqual({
+    expect(
+      schema.parse({ id: 'a', label: 'foo', score: null, active: true }),
+    ).toEqual({
       id: 'a',
       label: 'foo',
       score: null,
@@ -908,7 +957,12 @@ describe('createSelectSchema', () => {
     const schema = createSelectSchema(BaseSchema, {
       label: (field) => field.transform((value) => value.toUpperCase()),
     })
-    const parsed = schema.parse({ id: 'a', label: 'foo', score: null, active: true })
+    const parsed = schema.parse({
+      id: 'a',
+      label: 'foo',
+      score: null,
+      active: true,
+    })
     expect(parsed.label).toBe('FOO')
   })
 })
@@ -936,14 +990,19 @@ describe('createInsertSchema', () => {
       label: z.string().min(1),
     })
     expect(() => schema.parse({ id: 'a', label: '', score: null })).toThrow()
-    expect(() => schema.parse({ id: 'a', label: 'x', score: null })).not.toThrow()
+    expect(() =>
+      schema.parse({ id: 'a', label: 'x', score: null }),
+    ).not.toThrow()
   })
 
   test('replaces a zJsonSchema field with its inner schema for write-side validation', () => {
     // Confirms `resolveJsonColumn` swaps the JSON pipe for the inner object
     // schema. Without this the insert schema would expect a JSON string and
     // accept any string at validation time — including invalid payloads.
-    const InnerSchema = z.object({ version: z.number(), tags: z.array(z.string()) })
+    const InnerSchema = z.object({
+      version: z.number(),
+      tags: z.array(z.string()),
+    })
     const RowSchema = z.object({
       id: z.string(),
       meta: zJsonSchema(InnerSchema),
@@ -1001,7 +1060,9 @@ describe('migrate', () => {
   test('creates schema_version table on first run', () => {
     migrate(db, [])
     const tables = db
-      .query<{ name: string }, []>(`SELECT name FROM sqlite_master WHERE type='table'`)
+      .query<{ name: string }, []>(
+        `SELECT name FROM sqlite_master WHERE type='table'`,
+      )
       .all()
       .map((row) => row.name)
     expect(tables).toContain('schema_version')
@@ -1018,14 +1079,20 @@ describe('migrate', () => {
   })
 
   test('skips already-applied migrations on subsequent calls', () => {
-    const migrations = [{ version: 1, up: 'CREATE TABLE a (id INTEGER PRIMARY KEY)' }]
+    const migrations = [
+      { version: 1, up: 'CREATE TABLE a (id INTEGER PRIMARY KEY)' },
+    ]
     migrate(db, migrations)
     expect(() => migrate(db, migrations)).not.toThrow()
   })
 
   test('records applied version in schema_version', () => {
     migrate(db, [{ version: 1, up: 'CREATE TABLE a (id INTEGER PRIMARY KEY)' }])
-    const row = db.query<{ version: number }, []>('SELECT MAX(version) as version FROM schema_version').get()
+    const row = db
+      .query<{ version: number }, []>(
+        'SELECT MAX(version) as version FROM schema_version',
+      )
+      .get()
     expect(row?.version).toBe(1)
   })
 
@@ -1056,9 +1123,13 @@ describe('migrate', () => {
   test('rolls back if a migration fails, leaving version unchanged', () => {
     migrate(db, [{ version: 1, up: 'CREATE TABLE a (id INTEGER PRIMARY KEY)' }])
     expect(() =>
-      migrate(db, [{ version: 2, up: 'NOT VALID SQL !!!' }])
+      migrate(db, [{ version: 2, up: 'NOT VALID SQL !!!' }]),
     ).toThrow()
-    const row = db.query<{ version: number }, []>('SELECT MAX(version) as version FROM schema_version').get()
+    const row = db
+      .query<{ version: number }, []>(
+        'SELECT MAX(version) as version FROM schema_version',
+      )
+      .get()
     expect(row?.version).toBe(1)
   })
 
@@ -1113,7 +1184,11 @@ describe('migrate', () => {
       {
         version: 1,
         up: (database) => {
-          database.prepare('CREATE TABLE a (id INTEGER PRIMARY KEY, n INTEGER NOT NULL)').run()
+          database
+            .prepare(
+              'CREATE TABLE a (id INTEGER PRIMARY KEY, n INTEGER NOT NULL)',
+            )
+            .run()
           database.prepare('INSERT INTO a VALUES (1, 100)').run()
           database.prepare('INSERT INTO a VALUES (2, 200)').run()
         },
@@ -1127,7 +1202,9 @@ describe('migrate', () => {
       { id: 2, n: 200 },
     ])
     const versionRow = db
-      .query<{ version: number }, []>('SELECT MAX(version) as version FROM schema_version')
+      .query<{ version: number }, []>(
+        'SELECT MAX(version) as version FROM schema_version',
+      )
       .get()
     expect(versionRow?.version).toBe(1)
   })
@@ -1232,7 +1309,12 @@ function expectInvalidIdentifierError(opts: {
 describe('migrateAddColumn', () => {
   test('adds a column that does not exist', () => {
     db.run('CREATE TABLE items (id INTEGER PRIMARY KEY)')
-    migrateAddColumn({ db, table: 'items', column: 'label', definition: 'TEXT' })
+    migrateAddColumn({
+      db,
+      table: 'items',
+      column: 'label',
+      definition: 'TEXT',
+    })
     const columns = listColumnNames('items')
     expect(columns).toContain('label')
   })
@@ -1240,13 +1322,24 @@ describe('migrateAddColumn', () => {
   test('is a no-op if the column already exists', () => {
     db.run('CREATE TABLE items (id INTEGER PRIMARY KEY, label TEXT)')
     expect(() =>
-      migrateAddColumn({ db, table: 'items', column: 'label', definition: 'TEXT' })
+      migrateAddColumn({
+        db,
+        table: 'items',
+        column: 'label',
+        definition: 'TEXT',
+      }),
     ).not.toThrow()
   })
 
   test('throws MissingTableError when the target table does not exist', () => {
     const wrapped = expectMissingTableError({
-      run: () => migrateAddColumn({ db, table: 'nonexistent', column: 'label', definition: 'TEXT' }),
+      run: () =>
+        migrateAddColumn({
+          db,
+          table: 'nonexistent',
+          column: 'label',
+          definition: 'TEXT',
+        }),
       table: 'nonexistent',
       operation: 'add column',
     })
@@ -1254,10 +1347,17 @@ describe('migrateAddColumn', () => {
   })
 
   test('throws ColumnTypeMismatchError when the column exists with a different type', () => {
-    db.run('CREATE TABLE items (id INTEGER PRIMARY KEY, label INTEGER NOT NULL)')
+    db.run(
+      'CREATE TABLE items (id INTEGER PRIMARY KEY, label INTEGER NOT NULL)',
+    )
     let caught: unknown
     try {
-      migrateAddColumn({ db, table: 'items', column: 'label', definition: 'TEXT NOT NULL' })
+      migrateAddColumn({
+        db,
+        table: 'items',
+        column: 'label',
+        definition: 'TEXT NOT NULL',
+      })
     } catch (error) {
       caught = error
     }
@@ -1298,7 +1398,13 @@ describe('migrateAddColumn', () => {
 
   test('throws InvalidIdentifierError with kind=table on invalid table name', () => {
     expectInvalidIdentifierError({
-      run: () => migrateAddColumn({ db, table: 'bad-name', column: 'label', definition: 'TEXT' }),
+      run: () =>
+        migrateAddColumn({
+          db,
+          table: 'bad-name',
+          column: 'label',
+          definition: 'TEXT',
+        }),
       kind: 'table',
       value: 'bad-name',
     })
@@ -1307,7 +1413,13 @@ describe('migrateAddColumn', () => {
   test('throws InvalidIdentifierError with kind=column on invalid column name', () => {
     db.run('CREATE TABLE items (id INTEGER PRIMARY KEY)')
     expectInvalidIdentifierError({
-      run: () => migrateAddColumn({ db, table: 'items', column: 'bad-col!', definition: 'TEXT' }),
+      run: () =>
+        migrateAddColumn({
+          db,
+          table: 'items',
+          column: 'bad-col!',
+          definition: 'TEXT',
+        }),
       kind: 'column',
       value: 'bad-col!',
     })
@@ -1321,17 +1433,19 @@ describe('migrateAddColumn', () => {
         db,
         table: 'items',
         column: 'label',
-        definition: "TEXT; DROP TABLE items; --",
+        definition: 'TEXT; DROP TABLE items; --',
       })
     } catch (error) {
       caught = error
     }
     expect(caught).toBeInstanceOf(InvalidColumnDefinitionError)
     expect((caught as InvalidColumnDefinitionError).definition).toBe(
-      "TEXT; DROP TABLE items; --",
+      'TEXT; DROP TABLE items; --',
     )
     const tables = db
-      .query<{ name: string }, []>("SELECT name FROM sqlite_master WHERE type='table'")
+      .query<{ name: string }, []>(
+        "SELECT name FROM sqlite_master WHERE type='table'",
+      )
       .all()
       .map((row) => row.name)
     expect(tables).toContain('items')
@@ -1360,7 +1474,8 @@ describe('migrateDropColumn', () => {
 
   test('throws MissingTableError when the target table does not exist', () => {
     const wrapped = expectMissingTableError({
-      run: () => migrateDropColumn({ db, table: 'nonexistent', column: 'label' }),
+      run: () =>
+        migrateDropColumn({ db, table: 'nonexistent', column: 'label' }),
       table: 'nonexistent',
       operation: 'drop column',
     })
@@ -1449,7 +1564,9 @@ describe('migrateDropColumn', () => {
       }),
     ).not.toThrow()
     const row = db
-      .query<{ new_name: string }, []>('SELECT new_name FROM items WHERE id = 1')
+      .query<{ new_name: string }, []>(
+        'SELECT new_name FROM items WHERE id = 1',
+      )
       .get()
     expect(row?.new_name).toBe('preserved')
   })
@@ -1489,7 +1606,9 @@ describe('migrateRenameColumn', () => {
     db.run("INSERT INTO items (id, ts) VALUES (1, '2026-01-01T00:00:00Z')")
     migrateRenameColumn({ db, table: 'items', from: 'ts', to: 'timestamp' })
     const row = db
-      .query<{ timestamp: string }, []>('SELECT timestamp FROM items WHERE id = 1')
+      .query<{ timestamp: string }, []>(
+        'SELECT timestamp FROM items WHERE id = 1',
+      )
       .get()
     expect(row?.timestamp).toBe('2026-01-01T00:00:00Z')
   })
@@ -1523,7 +1642,13 @@ describe('migrateRenameColumn', () => {
 
   test('throws MissingTableError when the target table does not exist', () => {
     expectMissingTableError({
-      run: () => migrateRenameColumn({ db, table: 'nonexistent', from: 'ts', to: 'timestamp' }),
+      run: () =>
+        migrateRenameColumn({
+          db,
+          table: 'nonexistent',
+          from: 'ts',
+          to: 'timestamp',
+        }),
       table: 'nonexistent',
       operation: 'rename column',
     })
@@ -1531,7 +1656,13 @@ describe('migrateRenameColumn', () => {
 
   test('throws InvalidIdentifierError with kind=table on invalid table name', () => {
     expectInvalidIdentifierError({
-      run: () => migrateRenameColumn({ db, table: 'bad-name', from: 'ts', to: 'timestamp' }),
+      run: () =>
+        migrateRenameColumn({
+          db,
+          table: 'bad-name',
+          from: 'ts',
+          to: 'timestamp',
+        }),
       kind: 'table',
     })
   })
@@ -1539,7 +1670,8 @@ describe('migrateRenameColumn', () => {
   test('throws InvalidIdentifierError with kind=column on an invalid target name', () => {
     db.run('CREATE TABLE items (id INTEGER PRIMARY KEY, ts TEXT)')
     expectInvalidIdentifierError({
-      run: () => migrateRenameColumn({ db, table: 'items', from: 'ts', to: 'bad-col!' }),
+      run: () =>
+        migrateRenameColumn({ db, table: 'items', from: 'ts', to: 'bad-col!' }),
       kind: 'column',
     })
   })
@@ -1565,9 +1697,11 @@ describe('execWrite', () => {
       execWrite(db, () => {
         db.run('INSERT INTO items VALUES (1)')
         throw new Error('oops')
-      })
+      }),
     ).toThrow('oops')
-    const countRow = db.query<{ count: number }, []>('SELECT COUNT(*) as count FROM items').get()
+    const countRow = db
+      .query<{ count: number }, []>('SELECT COUNT(*) as count FROM items')
+      .get()
     expect(countRow?.count).toBe(0)
   })
 
@@ -1612,7 +1746,9 @@ describe('execWrite', () => {
   })
 
   test('rolls back a real SQLite constraint violation (UNIQUE) and reverts both writes', () => {
-    db.run('CREATE TABLE items (id INTEGER PRIMARY KEY, label TEXT NOT NULL UNIQUE)')
+    db.run(
+      'CREATE TABLE items (id INTEGER PRIMARY KEY, label TEXT NOT NULL UNIQUE)',
+    )
     db.run("INSERT INTO items VALUES (1, 'existing')")
     expect(() =>
       execWrite(db, () => {
@@ -1707,7 +1843,9 @@ describe('defineWrite — .run()', () => {
   })
 
   test('serializes boolean params to 0/1 like defineQuery does', () => {
-    db.run('CREATE TABLE flags (id INTEGER PRIMARY KEY, active INTEGER NOT NULL)')
+    db.run(
+      'CREATE TABLE flags (id INTEGER PRIMARY KEY, active INTEGER NOT NULL)',
+    )
     const insertFlag = defineWrite({
       db,
       params: z.object({ id: z.number().int(), active: z.boolean() }),
@@ -1715,7 +1853,9 @@ describe('defineWrite — .run()', () => {
     })
     insertFlag.run({ id: 1, active: true })
     insertFlag.run({ id: 2, active: false })
-    const rows = db.query<{ active: number }, []>('SELECT active FROM flags ORDER BY id').all()
+    const rows = db
+      .query<{ active: number }, []>('SELECT active FROM flags ORDER BY id')
+      .all()
     expect(rows.map((r) => r.active)).toEqual([1, 0])
   })
 })
@@ -1731,15 +1871,21 @@ describe('defineWrite — .runInTransaction()', () => {
   })
 
   test('rolls back when the statement throws (UNIQUE violation)', () => {
-    db.run('CREATE TABLE items (id INTEGER PRIMARY KEY, label TEXT UNIQUE NOT NULL)')
+    db.run(
+      'CREATE TABLE items (id INTEGER PRIMARY KEY, label TEXT UNIQUE NOT NULL)',
+    )
     db.run("INSERT INTO items VALUES (1, 'existing')")
     const insertItem = defineWrite({
       db,
       params: z.object({ id: z.number().int(), label: z.string() }),
       sql: 'INSERT INTO items VALUES ($id, $label)',
     })
-    expect(() => insertItem.runInTransaction({ id: 2, label: 'existing' })).toThrow()
-    const countRow = db.query<{ count: number }, []>('SELECT COUNT(*) as count FROM items').get()
+    expect(() =>
+      insertItem.runInTransaction({ id: 2, label: 'existing' }),
+    ).toThrow()
+    const countRow = db
+      .query<{ count: number }, []>('SELECT COUNT(*) as count FROM items')
+      .get()
     expect(countRow?.count).toBe(1)
   })
 
@@ -1748,7 +1894,9 @@ describe('defineWrite — .runInTransaction()', () => {
     const insertItem = defineInsertItem()
     // @ts-expect-error — bad shape, BEGIN IMMEDIATE fires before parse so ROLLBACK runs
     expect(() => insertItem.runInTransaction({ id: 'not-a-number' })).toThrow()
-    const countRow = db.query<{ count: number }, []>('SELECT COUNT(*) as count FROM items').get()
+    const countRow = db
+      .query<{ count: number }, []>('SELECT COUNT(*) as count FROM items')
+      .get()
     expect(countRow?.count).toBe(0)
   })
 })
@@ -1796,7 +1944,8 @@ describe('defineDynamicQuery', () => {
         prepareCount += 1
         return db.prepare(sql)
       },
-      transaction: <CallbackResult>(fn: () => CallbackResult) => db.transaction(fn),
+      transaction: <CallbackResult>(fn: () => CallbackResult) =>
+        db.transaction(fn),
     }
     return { adapter, getPrepareCount: () => prepareCount }
   }
@@ -1904,7 +2053,9 @@ describe('defineDynamicQuery', () => {
       sql: 'SELECT * FROM sessions',
       where: { byId: 'session_id = $session_id' },
     })
-    expect(find.one({ params: { session_id: 'missing' }, where: ['byId'] })).toBeNull()
+    expect(
+      find.one({ params: { session_id: 'missing' }, where: ['byId'] }),
+    ).toBeNull()
     const row = find.one({ params: { session_id: 's1' }, where: ['byId'] })
     expect(row?.session_id).toBe('s1')
   })
@@ -1922,8 +2073,14 @@ describe('defineDynamicQuery', () => {
         minTokens: 'total_tokens >= $min_tokens',
       },
     })
-    list.all({ params: { cwd: '/a', min_tokens: 0 }, where: ['cwd', 'minTokens'] })
-    list.all({ params: { cwd: '/a', min_tokens: 0 }, where: ['minTokens', 'cwd'] })
+    list.all({
+      params: { cwd: '/a', min_tokens: 0 },
+      where: ['cwd', 'minTokens'],
+    })
+    list.all({
+      params: { cwd: '/a', min_tokens: 0 },
+      where: ['minTokens', 'cwd'],
+    })
     expect(getPrepareCount()).toBe(1)
   })
 })

@@ -1,4 +1,4 @@
-import type { SqliteAdapter } from './types'
+import type { SqliteAdapter } from './types.js'
 
 /**
  * Knobs accepted by {@link configureZqliteAdapter}. All optional — omit any
