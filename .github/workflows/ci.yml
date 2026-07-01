@@ -21,9 +21,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         # argusFoundry is a git submodule (separate private repo) that the
-        # default GITHUB_TOKEN can't access. It's a build tool consumed by
-        # runtime via filesystem paths, not an npm workspace dep,
-        # so CI can skip it. Local dev still uses the submodule.
+        # default GITHUB_TOKEN can't access, so CI checks it out without
+        # submodules. It is a local dev/tooling-only dependency: nothing in
+        # `src/`, the configs, or the published `dist/` references it (runtime
+        # imports are relative modules + `zod` only), so both CI and installed
+        # consumers are unaffected by its absence.
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -77,14 +79,15 @@ jobs:
       # - name: Use CI bunfig (drops @flaky-tests preload)
       #   run: cp .github/bunfig.ci.toml bunfig.toml
 
-      # Bun 1.3.13+ sometimes segfaults during test process shutdown after a
-      # successful run (worker thread cleanup race). Tolerate non-zero exit when
-      # either:
-      #   1. The test summary shows zero failures (clean shutdown), OR
-      #   2. The crash is a Bun shutdown segfault AND no individual test
-      #      printed a (fail) marker.
-      # The summary doesn't always print before the crash, so check #2 catches
-      # the case where the panic preempts the summary.
+      # Bun sometimes segfaults during test-process shutdown *after* a
+      # successful run (worker-thread cleanup race). A non-zero exit is
+      # tolerated ONLY when the test summary printed cleanly — i.e. the run
+      # reached the end and reported zero failures. A non-zero exit with no
+      # clean summary (a crash mid-run, before the summary) is a real failure
+      # and fails the job: that is exactly how a crash-inducing bug in the code
+      # under test presents, and it must not pass. (An earlier version also
+      # tolerated a crash with no summary as long as no `(fail)` marker had
+      # printed — that let a genuine mid-run crash go green, so it was removed.)
       - name: Run tests
         run: |
           set +e
@@ -92,14 +95,8 @@ jobs:
           TEST_EXIT=${PIPESTATUS[0]}
           set -e
 
-          # Count fail markers — these are emitted per-test as it fails
-          FAIL_COUNT=$(grep -cE '\(fail\)' test-output.log || true)
-          # Check for the Bun shutdown segfault signature
-          IS_BUN_CRASH=0
-          if grep -qE 'panic: Segmentation fault|oh no: Bun has crashed' test-output.log; then
-            IS_BUN_CRASH=1
-          fi
-          # Check for a clean test summary
+          # A clean summary means the run reached the end: a "0 fail" line is
+          # present and no "N fail"/"N errors" line with N >= 1 is.
           HAS_CLEAN_SUMMARY=0
           if grep -qE '^ +0 fail' test-output.log && ! grep -qE '^ +[1-9][0-9]* (fail|errors?)' test-output.log; then
             HAS_CLEAN_SUMMARY=1
@@ -108,11 +105,9 @@ jobs:
           if [[ $TEST_EXIT -eq 0 ]]; then
             echo "::notice::Tests passed cleanly."
           elif [[ $HAS_CLEAN_SUMMARY -eq 1 ]]; then
-            echo "::warning::Bun crashed during shutdown but all tests passed (summary clean); ignoring exit $TEST_EXIT."
-          elif [[ $IS_BUN_CRASH -eq 1 && $FAIL_COUNT -eq 0 ]]; then
-            echo "::warning::Bun crashed during shutdown before printing summary, but no (fail) markers were emitted; ignoring exit $TEST_EXIT."
+            echo "::warning::Bun exited non-zero ($TEST_EXIT) but the summary reported 0 failures (shutdown segfault after a clean run); ignoring."
           else
-            echo "::error::Tests failed with exit $TEST_EXIT (fail markers: $FAIL_COUNT, bun crash: $IS_BUN_CRASH, clean summary: $HAS_CLEAN_SUMMARY)."
+            echo "::error::Tests failed with exit $TEST_EXIT and no clean summary (treated as a real failure — possible mid-run crash)."
             exit $TEST_EXIT
           fi
 
