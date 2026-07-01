@@ -281,5 +281,60 @@ export function defineIntegrationSuite(
       })
       assert.strictEqual(countRows.one({})?.total, 0)
     })
+
+    test('configureZqliteAdapter leaves no open cursor that blocks a later COMMIT', () => {
+      // Regression, driver-portable. configureZqliteAdapter issues result-returning
+      // PRAGMAs (journal_mode, busy_timeout). Some drivers — notably libsql — leave
+      // that statement's cursor open if the row is not consumed, and the open cursor
+      // makes the next COMMIT throw "cannot commit transaction - SQL statements in
+      // progress". This pins that a freshly configured connection can immediately
+      // commit an explicit execWrite transaction, on every driver.
+      const freshDb = adapter.makeDb()
+      configureZqliteAdapter(freshDb)
+      freshDb.prepare('CREATE TABLE cursor_probe (n INTEGER)').run()
+
+      execWrite(freshDb, () => {
+        freshDb.prepare('INSERT INTO cursor_probe (n) VALUES (1)').run()
+      })
+
+      const probeCount = defineQuery({
+        db: freshDb,
+        params: z.object({}),
+        result: z.object({ total: z.number().int() }),
+        sql: 'SELECT COUNT(*) AS total FROM cursor_probe',
+      })
+      assert.strictEqual(probeCount.one({})?.total, 1)
+    })
+
+    test('a .strict() result schema receives a clean row (no driver-injected keys)', () => {
+      // Driver-portable. A .strict() Zod object rejects unknown keys, so this
+      // fails if the adapter hands zqlite a row carrying extra fields. libsql
+      // injects a `_metadata` field into `.get()` rows; without the strip in its
+      // adapter, this throws QueryValidationError. The other drivers add nothing,
+      // so they pass unchanged — the test pins parity across all of them, and the
+      // deepStrictEqual (not just parse-success) proves no extra key leaked.
+      insertRecord(db, {
+        id: 'strict-1',
+        count: 5,
+        active: true,
+        created_at: FIXED_INSTANT,
+        meta: { tag: 'strict' },
+      })
+
+      const StrictProjection = z
+        .object({ id: z.string(), count: z.number().int() })
+        .strict()
+      const findStrict = defineQuery({
+        db,
+        params: IdParamsSchema,
+        result: StrictProjection,
+        sql: `SELECT id, count FROM ${TABLE_NAME} WHERE id = $id`,
+      })
+
+      assert.deepStrictEqual(findStrict.one({ id: 'strict-1' }), {
+        id: 'strict-1',
+        count: 5,
+      })
+    })
   })
 }

@@ -4,11 +4,11 @@ import { assertExpectedAdapters, getAvailableAdapters } from './adapters'
 import { defineIntegrationSuite } from './suite'
 
 /**
- * Drivers Node is required to host. node:sqlite is built into Node 22+, and
- * better-sqlite3 is a devDependency we control — so a failed native build must
- * fail the run rather than silently dropping to node:sqlite-only coverage.
+ * Drivers Node is required to host. node:sqlite is built into Node 22+;
+ * better-sqlite3 and libsql are devDependencies we control — so a failed native
+ * build must fail the run rather than silently dropping coverage.
  */
-const EXPECTED_DRIVERS_UNDER_NODE = ['better-sqlite3', 'node:sqlite']
+const EXPECTED_DRIVERS_UNDER_NODE = ['better-sqlite3', 'node:sqlite', 'libsql']
 
 /**
  * Node-runtime entry point for the driver-parity suite, run against the

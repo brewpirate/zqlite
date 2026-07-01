@@ -184,6 +184,7 @@ zqlite isn't coupled to a driver — it works with anything satisfying
 | [`bun:sqlite`](https://bun.sh/docs/api/sqlite) | `new Database(path)` directly — no wrapper. **Tested in CI (Bun).** |
 | [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3) | Set `paramPrefix: ''` (it expects bare keys, not `$name`). **Tested in CI (Node); not supported under Bun.** |
 | `node:sqlite` (Node 22+) | Needs a thin wrapper — no `.transaction()` method. **Tested in CI (Node 22 & 24).** |
+| [`libsql`](https://github.com/tursodatabase/libsql) (local) | Needs a thin wrapper — `paramPrefix: ''` and strip its injected `_metadata`. **Tested in CI (Bun & Node).** Local only — see note below. |
 
 **better-sqlite3** — without `paramPrefix: ''` every named parameter silently
 binds NULL (no error, wrong results):
@@ -205,6 +206,7 @@ function adaptNodeSqlite(database: DatabaseSync): SqliteAdapter {
   return {
     paramPrefix: '',
     prepare: (sql) => database.prepare(sql),
+    exec: (sql) => database.exec(sql),
     transaction: (callback) => () => {
       database.exec('BEGIN IMMEDIATE')
       try {
@@ -219,6 +221,48 @@ function adaptNodeSqlite(database: DatabaseSync): SqliteAdapter {
   }
 }
 ```
+
+**libsql** — Turso's SQLite fork. Its native package is a synchronous,
+better-sqlite3-compatible `Database` that loads under both Bun and Node. It
+needs a thin wrapper for two reasons: bare param keys (`paramPrefix: ''`), and
+it injects a `_metadata` field into every `.get()` row. A non-strict result
+schema (zqlite's default) ignores `_metadata`, but a `.strict()` schema would
+reject it — so strip it at the boundary to make libsql behave like the other
+drivers for every schema shape:
+
+```ts
+import Database from 'libsql'
+import type { SqliteAdapter } from 'zqlite'
+
+function adaptLibsql(database: Database): SqliteAdapter {
+  const strip = (row: unknown) => {
+    if (row && typeof row === 'object' && '_metadata' in row) {
+      delete (row as Record<string, unknown>)._metadata
+    }
+    return row
+  }
+  return {
+    paramPrefix: '',
+    exec: (sql) => database.exec(sql),
+    transaction: (callback) => database.transaction(callback),
+    prepare: (sql) => {
+      const statement = database.prepare(sql)
+      return {
+        get: (...params) => strip(statement.get(...params)),
+        all: (...params) => statement.all(...params).map(strip),
+        run: (...params) => statement.run(...params),
+      }
+    },
+  }
+}
+
+const db = adaptLibsql(new Database('app.db'))
+```
+
+This covers **local** libsql databases. Turso **cloud** — remote access or
+embedded replicas — is not yet supported: remote reads/writes are asynchronous,
+and zqlite is currently sync-only (see the "Sync only" limitation in the
+README).
 
 ## Error handling
 

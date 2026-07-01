@@ -68,6 +68,20 @@ export interface SqliteAdapter {
    */
   prepare(sql: string): SqliteStatement
   /**
+   * Executes one or more SQL statements directly, without preparing a reusable
+   * statement. Used for connection-setup PRAGMAs (see {@link configureZqliteAdapter}).
+   *
+   * This is required — not just a convenience — because some drivers (notably
+   * `libsql`) leave a result-returning statement's cursor open after `.run()`,
+   * and that open cursor makes a later `COMMIT` fail with "cannot commit
+   * transaction - SQL statements in progress". `exec` runs the statement as a
+   * one-shot with no lingering cursor, which is the portable way to issue
+   * PRAGMAs across every supported driver.
+   *
+   * `bun:sqlite`, `better-sqlite3`, `node:sqlite`, and `libsql` all provide it.
+   */
+  exec(sql: string): void
+  /**
    * Wraps a synchronous function in a database transaction. The returned
    * function commits on success and rolls back on throw. Matches the API
    * of `bun:sqlite` and `better-sqlite3`.

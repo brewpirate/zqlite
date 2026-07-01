@@ -11,10 +11,10 @@ import type { SqliteAdapter } from '../../src/types'
  *
  * The available cells are intentionally sparse — no driver runs everywhere:
  *
- * | Runtime | bun:sqlite | better-sqlite3      | node:sqlite |
- * |---------|------------|---------------------|-------------|
- * | Bun     | yes        | no — Bun rejects it | no          |
- * | Node 22+| no         | yes                 | yes         |
+ * | Runtime | bun:sqlite | better-sqlite3      | node:sqlite | libsql |
+ * |---------|------------|---------------------|-------------|--------|
+ * | Bun     | yes        | no — Bun rejects it | no          | yes    |
+ * | Node 22+| no         | yes                 | yes         | yes    |
  *
  * Two rules follow from that table and are load-bearing:
  *
@@ -67,6 +67,7 @@ function adaptNodeSqlite(database: NodeSqliteDatabase): SqliteAdapter {
     paramPrefix: '',
     prepare: (sql) =>
       database.prepare(sql) as ReturnType<SqliteAdapter['prepare']>,
+    exec: (sql) => database.exec(sql),
     transaction: (callback) => () => {
       database.exec('BEGIN IMMEDIATE')
       try {
@@ -77,6 +78,61 @@ function adaptNodeSqlite(database: NodeSqliteDatabase): SqliteAdapter {
         database.exec('ROLLBACK')
         throw error
       }
+    },
+  }
+}
+
+/**
+ * The subset of libsql's `Database` the {@link adaptLibsql} wrapper uses.
+ * Declared structurally so this file needs no static libsql import.
+ */
+interface LibsqlDatabase {
+  prepare(sql: string): {
+    get(...params: unknown[]): unknown
+    all(...params: unknown[]): unknown[]
+    run(...params: unknown[]): unknown
+  }
+  exec(sql: string): void
+  transaction<CallbackResult>(callback: () => CallbackResult): () => CallbackResult
+}
+
+/**
+ * Removes libsql's injected `_metadata` key from a result row, in place. Rows
+ * are plain mutable objects, so an in-place `delete` avoids copying; the
+ * `'_metadata' in row` guard makes it a no-op for rows that lack the key.
+ */
+function stripLibsqlMetadata(row: unknown): unknown {
+  if (row !== null && typeof row === 'object' && '_metadata' in row) {
+    delete (row as Record<string, unknown>)._metadata
+  }
+  return row
+}
+
+/**
+ * Wraps libsql's `Database` to satisfy {@link SqliteAdapter}. Two adjustments:
+ *
+ * - `paramPrefix: ''` — libsql binds bare keys (`{ name }`), like better-sqlite3.
+ * - **strips `_metadata`** — libsql injects a `_metadata` field into rows
+ *   returned by `.get()`. zqlite's default (non-strict) Zod objects drop it, but
+ *   a `.strict()` result schema would reject it with a QueryValidationError.
+ *   Removing it at the boundary makes libsql behave identically to the other
+ *   drivers for every schema shape. `.all()` rows are unaffected by libsql today
+ *   but pass through the same strip defensively.
+ */
+function adaptLibsql(database: LibsqlDatabase): SqliteAdapter {
+  return {
+    paramPrefix: '',
+    exec: (sql) => database.exec(sql),
+    transaction: (callback) => database.transaction(callback),
+    prepare: (sql) => {
+      const statement = database.prepare(sql)
+      return {
+        get: (...params: unknown[]) =>
+          stripLibsqlMetadata(statement.get(...params)),
+        all: (...params: unknown[]) =>
+          statement.all(...params).map(stripLibsqlMetadata),
+        run: (...params: unknown[]) => statement.run(...params),
+      } as ReturnType<SqliteAdapter['prepare']>
     },
   }
 }
@@ -148,6 +204,38 @@ async function tryNodeSqlite(): Promise<IntegrationAdapter | null> {
 }
 
 /**
+ * Returns the `libsql` cell, or `null` when the driver cannot be constructed.
+ * `libsql` (Turso's fork) ships a synchronous, better-sqlite3-compatible
+ * `Database` and — unlike `better-sqlite3` — its native addon loads under BOTH
+ * Bun and Node, so this cell runs in every runtime. Constructed via the same
+ * open-and-close probe as `better-sqlite3` in case a future runtime rejects the
+ * addon at construction. Wrapped with {@link adaptLibsql} for `paramPrefix: ''`
+ * and to strip libsql's injected `_metadata` field.
+ *
+ * Only the local/in-memory mode is exercised here — that fully satisfies
+ * `SqliteAdapter`. Turso cloud (remote or embedded replica) is out of scope for
+ * this suite; see `spikes/libsql-turso/` for that investigation.
+ */
+async function tryLibsql(): Promise<IntegrationAdapter | null> {
+  try {
+    const module = await import('libsql')
+    const LibsqlConstructor = module.default
+    new LibsqlConstructor(MEMORY_DATABASE_PATH).close()
+    return {
+      name: 'libsql',
+      makeDb: () =>
+        adaptLibsql(
+          new LibsqlConstructor(
+            MEMORY_DATABASE_PATH,
+          ) as unknown as LibsqlDatabase,
+        ),
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
  * Probes every driver and returns the cells available in the current runtime.
  * Callers iterate the result and register the shared suite once per adapter.
  *
@@ -160,6 +248,7 @@ export async function getAvailableAdapters(): Promise<IntegrationAdapter[]> {
     tryBunSqlite(),
     tryBetterSqlite3(),
     tryNodeSqlite(),
+    tryLibsql(),
   ])
   return candidates.filter(
     (candidate): candidate is IntegrationAdapter => candidate !== null,

@@ -3,3 +3,6 @@ dist/
 # Accidental artifacts / wrong package manager
 *.zip
 package-lock.json
+.local/
+spikes/
+:memory:*

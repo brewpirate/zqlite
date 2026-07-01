@@ -82,7 +82,7 @@ dependency).
 | [`bun:sqlite`](https://bun.sh/docs/api/sqlite) | **Tested** | Pass `new Database(path)` directly |
 | [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3) | **Tested** | Set `paramPrefix: ''` on the connection |
 | [`node:sqlite`](https://nodejs.org/docs/latest/api/sqlite.html) (Node 22+) | **Tested** | Needs a thin wrapper (no `.transaction()`) |
-| [`libsql`](https://github.com/tursodatabase/libsql) (local) | **Tested** | Set `paramPrefix: ''`; runs under both Bun and Node |
+| [`libsql`](https://github.com/tursodatabase/libsql) (local) | **Tested** | Needs a thin wrapper (`paramPrefix: ''`; strips `_metadata`); runs under Bun and Node |
 
 All four drivers run the same integration suite in CI: `bun:sqlite` and `libsql`
 under Bun, and `better-sqlite3`, `node:sqlite`, and `libsql` under Node 22 and

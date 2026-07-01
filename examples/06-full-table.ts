@@ -53,8 +53,9 @@ const SessionUpdateSchema = createUpdateSchema(SessionSchema).extend({
 // ── Setup ─────────────────────────────────────────────────────────────────────
 //
 // Multi-driver note: this uses `bun:sqlite`. The same `db` works with
-// `better-sqlite3` if you set `paramPrefix: ''` on it, or with Node's
-// `node:sqlite` via a small adapter — see docs/recipes.md → "Multiple drivers".
+// `better-sqlite3` or `libsql` if you set `paramPrefix: ''` on the connection,
+// or with Node's `node:sqlite` via a small adapter — see docs/recipes.md →
+// "Multiple drivers". All four run the same test suite in CI.
 
 /** In-memory database so this capstone example runs without touching disk; the schema is materialised by the migration below. */
 const db = new Database(':memory:')
