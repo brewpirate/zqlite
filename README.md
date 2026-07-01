@@ -1,5 +1,7 @@
 # zqlite
-
+<p align="center">
+  <img src="assets/header.png" alt="zqlite" >
+</p>
 Schema-first SQLite for TypeScript. Write a Zod schema once — get the DDL,
 the TypeScript types, and validated queries from it, with no redundancy and no
 ORM.
@@ -80,10 +82,13 @@ dependency).
 | [`bun:sqlite`](https://bun.sh/docs/api/sqlite) | **Tested** | Pass `new Database(path)` directly |
 | [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3) | **Tested** | Set `paramPrefix: ''` on the connection |
 | [`node:sqlite`](https://nodejs.org/docs/latest/api/sqlite.html) (Node 22+) | **Tested** | Needs a thin wrapper (no `.transaction()`) |
+| [`libsql`](https://github.com/tursodatabase/libsql) (local) | **Tested** | Set `paramPrefix: ''`; runs under both Bun and Node |
 
-All three drivers run the same integration suite in CI: `bun:sqlite` under Bun,
-`better-sqlite3` and `node:sqlite` under Node 22 and 24. (`better-sqlite3` is
-Node-only — Bun does not support its native addon.)
+All four drivers run the same integration suite in CI: `bun:sqlite` and `libsql`
+under Bun, and `better-sqlite3`, `node:sqlite`, and `libsql` under Node 22 and
+24. (`better-sqlite3` is Node-only — Bun does not support its native addon;
+`libsql` loads under both.) The `libsql` cell covers local databases; Turso
+cloud (remote / embedded replica) is not yet supported — it needs async support.
 
 Driver setup details are in
 [recipes.md → Multiple drivers](./docs/recipes.md#multiple-drivers).
