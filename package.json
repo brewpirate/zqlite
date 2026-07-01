@@ -34,13 +34,16 @@
     "lint:fix": "bun x @biomejs/biome lint --fix",
     "lint:error": "bun x @biomejs/biome lint --diagnostic-level=error",
     "fix": "bun run format:fix && bun run lint:fix",
+    "check": "tsc -p tsconfig.json",
     "check:all": "tsx scripts/gate.ts"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^26.0.1",
     "better-sqlite3": "^12.11.1",
+    "biome": "^0.3.3",
     "bun-types": "^1.3.14",
+    "libsql": "^0.5.29",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3"
   },

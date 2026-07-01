@@ -281,5 +281,29 @@ export function defineIntegrationSuite(
       })
       assert.strictEqual(countRows.one({})?.total, 0)
     })
+
+    test('configureZqliteAdapter leaves no open cursor that blocks a later COMMIT', () => {
+      // Regression, driver-portable. configureZqliteAdapter issues result-returning
+      // PRAGMAs (journal_mode, busy_timeout). Some drivers — notably libsql — leave
+      // that statement's cursor open if the row is not consumed, and the open cursor
+      // makes the next COMMIT throw "cannot commit transaction - SQL statements in
+      // progress". This pins that a freshly configured connection can immediately
+      // commit an explicit execWrite transaction, on every driver.
+      const freshDb = adapter.makeDb()
+      configureZqliteAdapter(freshDb)
+      freshDb.prepare('CREATE TABLE cursor_probe (n INTEGER)').run()
+
+      execWrite(freshDb, () => {
+        freshDb.prepare('INSERT INTO cursor_probe (n) VALUES (1)').run()
+      })
+
+      const probeCount = defineQuery({
+        db: freshDb,
+        params: z.object({}),
+        result: z.object({ total: z.number().int() }),
+        sql: 'SELECT COUNT(*) AS total FROM cursor_probe',
+      })
+      assert.strictEqual(probeCount.one({})?.total, 1)
+    })
   })
 }

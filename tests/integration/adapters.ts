@@ -11,10 +11,10 @@ import type { SqliteAdapter } from '../../src/types'
  *
  * The available cells are intentionally sparse — no driver runs everywhere:
  *
- * | Runtime | bun:sqlite | better-sqlite3      | node:sqlite |
- * |---------|------------|---------------------|-------------|
- * | Bun     | yes        | no — Bun rejects it | no          |
- * | Node 22+| no         | yes                 | yes         |
+ * | Runtime | bun:sqlite | better-sqlite3      | node:sqlite | libsql |
+ * |---------|------------|---------------------|-------------|--------|
+ * | Bun     | yes        | no — Bun rejects it | no          | yes    |
+ * | Node 22+| no         | yes                 | yes         | yes    |
  *
  * Two rules follow from that table and are load-bearing:
  *
@@ -67,6 +67,7 @@ function adaptNodeSqlite(database: NodeSqliteDatabase): SqliteAdapter {
     paramPrefix: '',
     prepare: (sql) =>
       database.prepare(sql) as ReturnType<SqliteAdapter['prepare']>,
+    exec: (sql) => database.exec(sql),
     transaction: (callback) => () => {
       database.exec('BEGIN IMMEDIATE')
       try {
@@ -148,6 +149,35 @@ async function tryNodeSqlite(): Promise<IntegrationAdapter | null> {
 }
 
 /**
+ * Returns the `libsql` cell, or `null` when the driver cannot be constructed.
+ * `libsql` (Turso's fork) ships a synchronous, better-sqlite3-compatible
+ * `Database` and — unlike `better-sqlite3` — its native addon loads under BOTH
+ * Bun and Node, so this cell runs in every runtime. Constructed via the same
+ * open-and-close probe as `better-sqlite3` in case a future runtime rejects the
+ * addon at construction. `paramPrefix: ''` because it binds bare keys.
+ *
+ * Only the local/in-memory mode is exercised here — that fully satisfies
+ * `SqliteAdapter`. Turso cloud (remote or embedded replica) is out of scope for
+ * this suite; see `spikes/libsql-turso/` for that investigation.
+ */
+async function tryLibsql(): Promise<IntegrationAdapter | null> {
+  try {
+    const module = await import('libsql')
+    const LibsqlDatabase = module.default
+    new LibsqlDatabase(MEMORY_DATABASE_PATH).close()
+    return {
+      name: 'libsql',
+      makeDb: () =>
+        Object.assign(new LibsqlDatabase(MEMORY_DATABASE_PATH), {
+          paramPrefix: '',
+        }) as unknown as SqliteAdapter,
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
  * Probes every driver and returns the cells available in the current runtime.
  * Callers iterate the result and register the shared suite once per adapter.
  *
@@ -160,6 +190,7 @@ export async function getAvailableAdapters(): Promise<IntegrationAdapter[]> {
     tryBunSqlite(),
     tryBetterSqlite3(),
     tryNodeSqlite(),
+    tryLibsql(),
   ])
   return candidates.filter(
     (candidate): candidate is IntegrationAdapter => candidate !== null,

@@ -42,10 +42,17 @@ artifact is sound.
 
 The parity suite is sparse by design — no driver runs everywhere:
 
-| Runtime | `bun:sqlite` | `better-sqlite3` | `node:sqlite` |
-|---|---|---|---|
-| Bun | ✅ | ❌ Bun rejects its native addon | ❌ |
-| Node 22+ | ❌ | ✅ | ✅ (built in) |
+| Runtime | `bun:sqlite` | `better-sqlite3` | `node:sqlite` | `libsql` |
+|---|---|---|---|---|
+| Bun | ✅ | ❌ Bun rejects its native addon | ❌ | ✅ |
+| Node 22+ | ❌ | ✅ | ✅ (built in) | ✅ |
+
+`libsql` covers **local** databases only; Turso cloud needs async support (see
+`spikes/libsql-turso/`). Two libsql gotchas, both handled: it binds bare keys
+(`paramPrefix: ''`), and it leaves a result-returning statement's cursor open
+after `.run()` — so `configureZqliteAdapter` issues setup PRAGMAs via a one-shot
+(`SqliteAdapter.exec`, or bun's `run`), never `prepare().run()`, or a later
+`COMMIT` fails with "SQL statements in progress".
 
 The adapter registry ([tests/integration/adapters.ts](tests/integration/adapters.ts))
 probes each driver by *constructing* a connection (importing is not enough —

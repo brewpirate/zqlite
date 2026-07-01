@@ -20,7 +20,7 @@ import { defineIntegrationSuite } from './suite'
  *
  * NOT named `*.test.ts`, so Bun's test glob never executes it.
  */
-const EXPECTED_DRIVERS_UNDER_NODE = ['better-sqlite3', 'node:sqlite']
+const EXPECTED_DRIVERS_UNDER_NODE = ['better-sqlite3', 'node:sqlite', 'libsql']
 
 const adapters = await getAvailableAdapters()
 assertExpectedAdapters(adapters, EXPECTED_DRIVERS_UNDER_NODE, 'Node (dist)')

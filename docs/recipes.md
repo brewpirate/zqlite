@@ -184,6 +184,7 @@ zqlite isn't coupled to a driver — it works with anything satisfying
 | [`bun:sqlite`](https://bun.sh/docs/api/sqlite) | `new Database(path)` directly — no wrapper. **Tested in CI (Bun).** |
 | [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3) | Set `paramPrefix: ''` (it expects bare keys, not `$name`). **Tested in CI (Node); not supported under Bun.** |
 | `node:sqlite` (Node 22+) | Needs a thin wrapper — no `.transaction()` method. **Tested in CI (Node 22 & 24).** |
+| [`libsql`](https://github.com/tursodatabase/libsql) (local) | Set `paramPrefix: ''` (better-sqlite3-compatible). **Tested in CI (Bun & Node).** Local only — see note below. |
 
 **better-sqlite3** — without `paramPrefix: ''` every named parameter silently
 binds NULL (no error, wrong results):
@@ -205,6 +206,7 @@ function adaptNodeSqlite(database: DatabaseSync): SqliteAdapter {
   return {
     paramPrefix: '',
     prepare: (sql) => database.prepare(sql),
+    exec: (sql) => database.exec(sql),
     transaction: (callback) => () => {
       database.exec('BEGIN IMMEDIATE')
       try {
@@ -219,6 +221,22 @@ function adaptNodeSqlite(database: DatabaseSync): SqliteAdapter {
   }
 }
 ```
+
+**libsql** — Turso's SQLite fork. Its native package is a synchronous,
+better-sqlite3-compatible `Database` that loads under both Bun and Node, so set
+`paramPrefix: ''` and pass it directly:
+
+```ts
+import Database from 'libsql'
+import type { SqliteAdapter } from 'zqlite'
+
+const db: SqliteAdapter = Object.assign(new Database('app.db'), { paramPrefix: '' })
+```
+
+This covers **local** libsql databases. Turso **cloud** — remote access or
+embedded replicas — is not yet supported: remote reads/writes are asynchronous,
+and zqlite is currently sync-only (see the "Sync only" limitation in the
+README).
 
 ## Error handling
 

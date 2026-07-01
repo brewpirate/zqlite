@@ -3,8 +3,11 @@ import * as zqlite from '../../src/index'
 import { assertExpectedAdapters, getAvailableAdapters } from './adapters'
 import { defineIntegrationSuite } from './suite'
 
-/** Drivers Bun is required to host — Bun ships bun:sqlite and nothing else here. */
-const EXPECTED_DRIVERS_UNDER_BUN = ['bun:sqlite']
+/**
+ * Drivers Bun is required to host: bun:sqlite (built in) and libsql (its native
+ * addon loads under Bun). better-sqlite3 and node:sqlite are absent under Bun.
+ */
+const EXPECTED_DRIVERS_UNDER_BUN = ['bun:sqlite', 'libsql']
 
 /**
  * Bun-runtime entry point for the driver-parity suite. Named `*.test.ts` so

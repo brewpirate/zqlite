@@ -1730,6 +1730,8 @@ describe('execWrite', () => {
         return db.prepare(sql)
       },
       transaction: <T>(fn: () => T) => db.transaction(fn),
+      // bun:sqlite deprecated Database.exec in favor of Database.run.
+      exec: (sql: string) => db.run(sql),
     }
     let caught: unknown
     try {
@@ -1946,6 +1948,8 @@ describe('defineDynamicQuery', () => {
       },
       transaction: <CallbackResult>(fn: () => CallbackResult) =>
         db.transaction(fn),
+      // bun:sqlite deprecated Database.exec in favor of Database.run.
+      exec: (sql: string) => db.run(sql),
     }
     return { adapter, getPrepareCount: () => prepareCount }
   }

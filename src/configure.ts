@@ -75,10 +75,51 @@ export function configureZqliteAdapter(
   const busyTimeoutMs = opts.busyTimeoutMs ?? 5000
   const foreignKeys = opts.foreignKeys ?? false
 
-  db.prepare(`PRAGMA journal_mode = ${journalMode}`).run()
-  db.prepare(`PRAGMA synchronous = ${synchronous}`).run()
-  db.prepare(`PRAGMA busy_timeout = ${busyTimeoutMs}`).run()
+  // PRAGMAs are issued as one-shot statements, NOT via `prepare(...).run()`.
+  // `PRAGMA journal_mode` and `PRAGMA busy_timeout` return a row; some drivers
+  // (notably libsql) leave that statement's cursor open after `.run()`, and the
+  // open cursor makes the next `COMMIT` fail with "cannot commit transaction -
+  // SQL statements in progress". A one-shot exec has no lingering cursor.
+  runConfigurationStatement(db, `PRAGMA journal_mode = ${journalMode}`)
+  runConfigurationStatement(db, `PRAGMA synchronous = ${synchronous}`)
+  runConfigurationStatement(db, `PRAGMA busy_timeout = ${busyTimeoutMs}`)
   if (foreignKeys) {
-    db.prepare('PRAGMA foreign_keys = ON').run()
+    runConfigurationStatement(db, 'PRAGMA foreign_keys = ON')
   }
+}
+
+/** A driver connection that additionally exposes bun:sqlite's `run(sql)`. */
+interface ConnectionWithRun {
+  run(sql: string): unknown
+}
+
+/**
+ * Returns `true` when the connection exposes a connection-level `run(sql)`.
+ * Only `bun:sqlite` does; `better-sqlite3`, `node:sqlite`, and `libsql` expose
+ * `run` on prepared statements, not on the connection.
+ */
+function hasConnectionRun(db: SqliteAdapter): db is SqliteAdapter & ConnectionWithRun {
+  return (
+    typeof (db as Partial<ConnectionWithRun>).run === 'function'
+  )
+}
+
+/**
+ * Executes one setup PRAGMA as a one-shot statement, choosing the method that
+ * avoids a deprecated path per driver:
+ *
+ * - `bun:sqlite` deprecated `Database.exec` in favor of `Database.run`, and it
+ *   is the only driver with a connection-level `run` — so prefer `run` there.
+ * - `better-sqlite3`, `node:sqlite`, and `libsql` expose `exec` (not a
+ *   connection-level `run`), so fall back to the `exec` guaranteed by
+ *   {@link SqliteAdapter}.
+ *
+ * Either way the PRAGMA runs as a one-shot with no lingering cursor.
+ */
+function runConfigurationStatement(db: SqliteAdapter, sql: string): void {
+  if (hasConnectionRun(db)) {
+    db.run(sql)
+    return
+  }
+  db.exec(sql)
 }
