@@ -1,9 +1,21 @@
 {
   "name": "zqlite",
   "version": "0.1.0",
-  "description": "Schema-first SQLite for Bun. Write Zod schemas once — get DDL, TypeScript types, and validated queries.",
+  "description": "Schema-first SQLite for TypeScript — write a Zod schema once, get the DDL, the types, and validated queries. Works with bun:sqlite, better-sqlite3, node:sqlite, and libsql.",
   "type": "module",
   "license": "MIT",
+  "author": {
+    "name": "Daniel Zenner",
+    "url": "https://github.com/brewpirate"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/brewpirate/zqlite.git"
+  },
+  "bugs": {
+    "url": "https://github.com/brewpirate/zqlite/issues"
+  },
+  "homepage": "https://github.com/brewpirate/zqlite#readme",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -58,7 +70,10 @@
     "schema",
     "ddl",
     "type-safe",
-    "validation"
+    "validation",
+    "libsql",
+    "node:sqlite",
+    "turso"
   ],
   "engines": {
     "node": ">=22"
