@@ -268,8 +268,9 @@ function adaptLibsql(database: Database): SqliteAdapter {
 const db = adaptLibsql(new Database('app.db'))
 ```
 
-This covers **local** libsql databases (synchronous). For Turso **cloud** —
-remote over HTTP — use the async API with `@libsql/client`, below.
+This is the **local, synchronous** libsql driver. For a remote **Turso cloud**
+database — asynchronous, over HTTP — see the [Turso cloud guide](./turso.md)
+(summarized in [Async & Turso cloud](#async--turso-cloud) below).
 
 ## Async & Turso cloud
 
