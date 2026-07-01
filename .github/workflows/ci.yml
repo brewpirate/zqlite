@@ -39,6 +39,13 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      # The integration tests import the package by name ('zqlite'), which
+      # resolves through the exports map to ./dist. dist is gitignored, so a
+      # fresh CI checkout has none — build before the typecheck or `bun run
+      # check` fails on those files with "Cannot find module 'zqlite'".
+      - name: Build
+        run: bun run build
+
       - name: Type check
         run: bun run check
 

@@ -176,6 +176,59 @@ export class QueryValidationError extends ZqliteError {
 }
 
 /**
+ * A `define*` statement's SQL and its params schema disagree in a way that
+ * would produce a silent or driver-dependent bug at runtime. Surfaced eagerly
+ * at definition time (module init) so the failure is uniform across drivers
+ * instead of silent on `bun:sqlite`, a NULL-bind on `node:sqlite`, or a throw
+ * on `better-sqlite3`.
+ *
+ * Two fatal conditions are carried:
+ * - `missingParams` — a `$name` placeholder in the SQL has no matching key in
+ *   the params schema. On `bun:sqlite` this silently binds NULL; the check
+ *   turns it into an eager, cross-driver error.
+ * - `foreignPlaceholders` — a `:name` / `@name` / `?` placeholder syntax the
+ *   library's `$`-keyed binding path does not fill, so it would silently bind
+ *   NULL. zqlite documents `$name` placeholders only.
+ *
+ * A param declared but never referenced by the SQL is NOT fatal — it is a
+ * documented pattern (a `createInsertSchema` superset with a partial-column
+ * INSERT), so it is warned about (only when the param is required), never
+ * thrown.
+ */
+export class PlaceholderMismatchError extends ZqliteError {
+  override name = 'PlaceholderMismatchError'
+
+  readonly sql: string
+  readonly missingParams: string[]
+  readonly foreignPlaceholders: string[]
+
+  constructor(opts: {
+    sql: string
+    missingParams: string[]
+    foreignPlaceholders: string[]
+  }) {
+    const problems: string[] = []
+    if (opts.missingParams.length > 0) {
+      const placeholders = opts.missingParams
+        .map((name) => `$${name}`)
+        .join(', ')
+      problems.push(`placeholders with no matching param: ${placeholders}`)
+    }
+    if (opts.foreignPlaceholders.length > 0) {
+      problems.push(
+        `unsupported placeholder syntax (use $name): ${opts.foreignPlaceholders.join(', ')}`,
+      )
+    }
+    super(
+      `SQL does not match params schema — ${problems.join('; ')}. SQL: ${opts.sql}`,
+    )
+    this.sql = opts.sql
+    this.missingParams = opts.missingParams
+    this.foreignPlaceholders = opts.foreignPlaceholders
+  }
+}
+
+/**
  * `execWrite` caught the user callback's error, then `ROLLBACK` itself failed.
  * The original error is stored on `originalError` (and as `cause`) so callers
  * never lose the trigger; `rollbackError` carries the rollback failure for
