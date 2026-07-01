@@ -305,5 +305,36 @@ export function defineIntegrationSuite(
       })
       assert.strictEqual(probeCount.one({})?.total, 1)
     })
+
+    test('a .strict() result schema receives a clean row (no driver-injected keys)', () => {
+      // Driver-portable. A .strict() Zod object rejects unknown keys, so this
+      // fails if the adapter hands zqlite a row carrying extra fields. libsql
+      // injects a `_metadata` field into `.get()` rows; without the strip in its
+      // adapter, this throws QueryValidationError. The other drivers add nothing,
+      // so they pass unchanged — the test pins parity across all of them, and the
+      // deepStrictEqual (not just parse-success) proves no extra key leaked.
+      insertRecord(db, {
+        id: 'strict-1',
+        count: 5,
+        active: true,
+        created_at: FIXED_INSTANT,
+        meta: { tag: 'strict' },
+      })
+
+      const StrictProjection = z
+        .object({ id: z.string(), count: z.number().int() })
+        .strict()
+      const findStrict = defineQuery({
+        db,
+        params: IdParamsSchema,
+        result: StrictProjection,
+        sql: `SELECT id, count FROM ${TABLE_NAME} WHERE id = $id`,
+      })
+
+      assert.deepStrictEqual(findStrict.one({ id: 'strict-1' }), {
+        id: 'strict-1',
+        count: 5,
+      })
+    })
   })
 }

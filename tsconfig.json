@@ -29,6 +29,8 @@
     "examples/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "dist",
+    "tests/integration/node-dist-entry.ts"
   ]
 }

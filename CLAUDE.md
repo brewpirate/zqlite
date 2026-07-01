@@ -48,11 +48,18 @@ The parity suite is sparse by design — no driver runs everywhere:
 | Node 22+ | ❌ | ✅ | ✅ (built in) | ✅ |
 
 `libsql` covers **local** databases only; Turso cloud needs async support (see
-`spikes/libsql-turso/`). Two libsql gotchas, both handled: it binds bare keys
-(`paramPrefix: ''`), and it leaves a result-returning statement's cursor open
-after `.run()` — so `configureZqliteAdapter` issues setup PRAGMAs via a one-shot
-(`SqliteAdapter.exec`, or bun's `run`), never `prepare().run()`, or a later
-`COMMIT` fails with "SQL statements in progress".
+`spikes/libsql-turso/`). Three libsql gotchas, all handled:
+
+1. It binds bare keys (`paramPrefix: ''`).
+2. It leaves a result-returning statement's cursor open after `.run()` — so
+   `configureZqliteAdapter` issues setup PRAGMAs via a one-shot
+   (`SqliteAdapter.exec`, or bun's `run`), never `prepare().run()`, or a later
+   `COMMIT` fails with "SQL statements in progress".
+3. It injects a `_metadata` field into every `.get()` row. Non-strict result
+   schemas (the default) drop it, but a `.strict()` schema rejects it — so libsql
+   is used through the `adaptLibsql` wrapper (test factory in
+   `tests/integration/adapters.ts`; documented in `docs/recipes.md`) that strips
+   `_metadata`. The `.strict()` parity test guards this.
 
 The adapter registry ([tests/integration/adapters.ts](tests/integration/adapters.ts))
 probes each driver by *constructing* a connection (importing is not enough —
