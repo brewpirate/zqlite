@@ -129,7 +129,10 @@ describe.skipIf(!hasCredentials)('async API against live Turso', () => {
       }),
     ).rejects.toThrow('forced remote rollback')
 
-    // Server-side isolation: the row must not have persisted remotely.
+    // Server-side atomicity: the pre-throw write must not have persisted
+    // remotely — the rollback reached the server, not just the JS client. (This
+    // proves all-or-nothing atomicity over the wire, not isolation between
+    // concurrent transactions, which would need two racing clients.)
     expect((await countRows().one({}))?.total).toBe(before)
     const findById = defineAsyncQuery({
       db: client,
