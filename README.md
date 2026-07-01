@@ -62,6 +62,7 @@ learn. You write the SQL; zqlite just owns the boundary around it.
 |---|---|
 | **[Getting started](./docs/getting-started.md)** | Zero to a working table in about five minutes |
 | **[Recipes](./docs/recipes.md)** | The task-by-task stuff: writes, dynamic queries, JSON, migrations, drivers |
+| **[Turso cloud](./docs/turso.md)** | The async API for a remote Turso database |
 | **[API reference](./docs/api-reference.md)** | Every export, option, and error |
 | **[Examples](./examples)** | Runnable and numbered — `bun examples/01-quickstart.ts` |
 
@@ -89,19 +90,20 @@ shape works; here's what's tested:
 | [`bun:sqlite`](https://bun.sh/docs/api/sqlite) | **Tested** | Pass `new Database(path)` straight in |
 | [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3) | **Tested** | Set `paramPrefix: ''` on the connection |
 | [`node:sqlite`](https://nodejs.org/docs/latest/api/sqlite.html) (Node 22+) | **Tested** | Thin wrapper — it has no `.transaction()` |
-| [`libsql`](https://github.com/tursodatabase/libsql) (local) | **Tested** | Thin wrapper — `paramPrefix: ''` and strip its `_metadata` field; runs on Bun and Node |
+| [`libsql`](https://github.com/tursodatabase/libsql) (local, sync) | **Tested** | Thin wrapper — `paramPrefix: ''` and strip its `_metadata` field; runs on Bun and Node |
 
 Every one of these runs the same integration suite in CI — `bun:sqlite` and
 `libsql` under Bun, and `better-sqlite3`, `node:sqlite`, and `libsql` under Node
 22 and 24. (`better-sqlite3` is Node-only; Bun won't load its native addon.
 `libsql` is the one that runs on both.)
 
-The four drivers above are **synchronous**. **Turso cloud** — remote over HTTP —
-is reached through the separate **async API** (`defineAsyncQuery`,
-`defineAsyncWrite`, `execWriteAsync`) over
-[`@libsql/client`](https://github.com/tursodatabase/libsql-client-ts). Same
-schema, same validation and coercion — the calls just return Promises. See
-[recipes.md → Async & Turso cloud](./docs/recipes.md#async--turso-cloud).
+**libsql comes in two flavors.** The `libsql` row above is the *local*,
+synchronous driver. For a remote **Turso cloud** database — asynchronous, over
+HTTP — use the separate **async API** (`defineAsyncQuery`, `defineAsyncWrite`,
+`execWriteAsync`) over
+[`@libsql/client`](https://github.com/tursodatabase/libsql-client-ts): same
+schema, same validation and coercion, the calls just return Promises. See the
+[Turso cloud guide](./docs/turso.md).
 
 Wrapper snippets for each driver live in
 [recipes.md → Multiple drivers](./docs/recipes.md#multiple-drivers).

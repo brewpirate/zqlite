@@ -192,8 +192,8 @@ zqlite isn't coupled to a driver — it works with anything satisfying
 |---|---|
 | [`bun:sqlite`](https://bun.sh/docs/api/sqlite) | `new Database(path)` directly — no wrapper. **Tested in CI (Bun).** |
 | [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3) | Set `paramPrefix: ''` (it expects bare keys, not `$name`). **Tested in CI (Node); not supported under Bun.** |
-| `node:sqlite` (Node 22+) | Needs a thin wrapper — no `.transaction()` method. **Tested in CI (Node 22 & 24).** |
-| [`libsql`](https://github.com/tursodatabase/libsql) (local) | Needs a thin wrapper — `paramPrefix: ''` and strip its injected `_metadata`. **Tested in CI (Bun & Node).** Local only — see note below. |
+| [`node:sqlite`](https://nodejs.org/docs/latest/api/sqlite.html) (Node 22+) | Needs a thin wrapper — no `.transaction()` method. **Tested in CI (Node 22 & 24).** |
+| [`libsql`](https://github.com/tursodatabase/libsql) (local, sync) | Needs a thin wrapper — `paramPrefix: ''` and strip its injected `_metadata`. **Tested in CI (Bun & Node).** This is the *local* driver; for remote **Turso cloud** use the async API (see [turso.md](./turso.md)). |
 
 **better-sqlite3** — without `paramPrefix: ''` every named parameter silently
 binds NULL (no error, wrong results):
@@ -268,24 +268,25 @@ function adaptLibsql(database: Database): SqliteAdapter {
 const db = adaptLibsql(new Database('app.db'))
 ```
 
-This covers **local** libsql databases (synchronous). For Turso **cloud** —
-remote over HTTP — use the async API with `@libsql/client`, below.
+This is the **local, synchronous** libsql driver. For a remote **Turso cloud**
+database — asynchronous, over HTTP — see the [Turso cloud guide](./turso.md)
+(summarized in [Async & Turso cloud](#async--turso-cloud) below).
 
 ## Async & Turso cloud
 
-Remote Turso is asynchronous, so it uses a parallel async surface:
-`defineAsyncQuery`, `defineAsyncWrite`, and `execWriteAsync`. They share the same
-validation core as the sync API — the same schema, the same boolean/Date/JSON
-coercion, the same `$name` placeholder check — the calls just return Promises.
-Pass [`@libsql/client`](https://github.com/tursodatabase/libsql-client-ts)'s
-`Client` directly; it satisfies `AsyncSqliteAdapter` with no wrapper.
+Remote Turso is asynchronous, so it uses a parallel async surface —
+`defineAsyncQuery`, `defineAsyncWrite`, `execWriteAsync` — over
+[`@libsql/client`](https://github.com/tursodatabase/libsql-client-ts). Same
+schema, same validation and coercion as the sync API; the calls just return
+Promises, and `@libsql/client`'s `Client` satisfies `AsyncSqliteAdapter` with no
+wrapper:
 
 ```ts
 import { createClient } from '@libsql/client'
-import { defineAsyncQuery, defineAsyncWrite, execWriteAsync } from 'zqlite'
+import { defineAsyncQuery } from 'zqlite'
 
 const db = createClient({
-  url: process.env.TURSO_DATABASE_URL, // libsql://<db>.turso.io
+  url: process.env.TURSO_DATABASE_URL,
   authToken: process.env.TURSO_AUTH_TOKEN, // a database auth token, not a platform token
 })
 
@@ -296,35 +297,12 @@ const findBook = defineAsyncQuery({
   sql: 'SELECT * FROM books WHERE book_id = $book_id',
 })
 const book = await findBook.one({ book_id: 'bk_1' }) // Book | null, fully coerced
-
-const lendBook = defineAsyncWrite({
-  db,
-  params: z.object({ book_id: z.string(), borrower: z.string() }),
-  sql: 'UPDATE books SET borrower = $borrower WHERE book_id = $book_id',
-})
 ```
 
-**Transactions** use `execWriteAsync`, which opens an interactive transaction and
-passes it to your callback. Run write handles against it via their second
-argument so they're part of the transaction:
-
-```ts
-await execWriteAsync(db, async (tx) => {
-  await lendBook.run({ book_id: 'bk_1', borrower: 'ada' }, tx)
-  await logActivity.run({ detail: 'bk_1 lent to ada' }, tx)
-})
-// both commit together, or both roll back if the callback throws
-```
-
-> **Latency.** Each statement is a network round-trip, so an interactive
-> transaction costs one round-trip per statement (plus begin/commit). When a
-> batch of writes doesn't need to read between them, `@libsql/client`'s own
-> `batch()` sends them in a single round-trip — reach for `execWriteAsync` when
-> you need read-your-writes or conditional logic mid-transaction.
-
-> **`:memory:` caveat.** `@libsql/client` gives each `:memory:` call a fresh
-> connection, so a table created in one call is invisible to the next. Use a
-> `file:` URL locally, or a real `libsql://` URL — both are one logical database.
+Transactions (`execWriteAsync`), the database-vs-platform token distinction,
+remote latency and `batch()`, and local `file:` development are all covered in
+the **[Turso cloud guide](./turso.md)**, with a runnable
+[`examples/07-turso-cloud.ts`](../examples/07-turso-cloud.ts).
 
 ## Error handling
 
