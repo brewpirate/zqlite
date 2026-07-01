@@ -15,6 +15,7 @@ export {
   InvalidIdentifierError,
   MissingTableError,
   NestedTypeError,
+  PlaceholderMismatchError,
   QueryValidationError,
   TransactionRollbackError,
   UnsupportedDefaultError,

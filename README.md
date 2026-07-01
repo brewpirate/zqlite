@@ -1,5 +1,7 @@
 # zqlite
-
+<p align="center">
+  <img src="assets/header.png" alt="zqlite" >
+</p>
 Schema-first SQLite for TypeScript. Write a Zod schema once — get the DDL,
 the TypeScript types, and validated queries from it, with no redundancy and no
 ORM.

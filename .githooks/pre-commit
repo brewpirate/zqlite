@@ -5,4 +5,4 @@
 # .github/workflows/lint_test.yml, which runs the same `check:all`.
 set -euo pipefail
 
-bun run check:all
+bun check:all

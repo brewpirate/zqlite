@@ -1,6 +1,7 @@
 import type { z } from 'zod'
 import { QueryValidationError } from './errors.js'
 import { buildRowCoercer, prefixParamKeys } from './internal.js'
+import { assertStaticPlaceholders } from './placeholders.js'
 import { serializeRow } from './serialize.js'
 import type { SqliteAdapter } from './types.js'
 
@@ -25,6 +26,13 @@ export interface DefineQueryOptions<
   result: ResultSchema
   /** The SQL statement. Use `$param` named placeholders matching `params` keys. */
   sql: string
+  /**
+   * Bypass the definition-time SQL/params cross-check. The check throws at
+   * module init if a `$name` placeholder has no matching param key (a silent
+   * NULL-bind on `bun:sqlite`) — set this only to escape a false positive from
+   * the literal/comment stripper on otherwise-valid SQL.
+   */
+  skipPlaceholderCheck?: boolean
 }
 
 /**
@@ -67,6 +75,7 @@ export function defineQuery<
   options: DefineQueryOptions<ParamsSchema, ResultSchema>,
 ): QueryHandle<ParamsSchema, ResultSchema> {
   const { db, params: paramSchema, result: resultSchema, sql } = options
+  assertStaticPlaceholders(sql, paramSchema, options.skipPlaceholderCheck)
   const statement = db.prepare(sql)
   const coerceRow = buildRowCoercer(resultSchema)
   const paramPrefix = db.paramPrefix ?? '$'

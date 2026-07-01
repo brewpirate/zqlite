@@ -25,7 +25,7 @@
     "prepare": "git config core.hooksPath .githooks || true",
     "test": "bun test",
     "test:node": "node --import tsx --disable-warning=ExperimentalWarning --test tests/integration/node-entry.ts",
-    "test:node:dist": "bun run build && node tests/integration/dist-load-check.mjs && node --import tsx --disable-warning=ExperimentalWarning --test tests/integration/node-dist-entry.ts",
+    "test:node:dist": "bun run build && bun run check:dist && node tests/integration/dist-load-check.mjs && node --import tsx --disable-warning=ExperimentalWarning --test tests/integration/node-dist-entry.ts",
     "test:all": "bun run test && bun run test:node",
     "build": "tsc -p tsconfig.build.json",
     "format": "npx @biomejs/biome format",
@@ -35,6 +35,7 @@
     "lint:error": "bun x @biomejs/biome lint --diagnostic-level=error",
     "fix": "bun run format:fix && bun run lint:fix",
     "check": "tsc -p tsconfig.json",
+    "check:dist": "tsc -p tsconfig.dist.json",
     "check:all": "tsx scripts/gate.ts"
   },
   "devDependencies": {

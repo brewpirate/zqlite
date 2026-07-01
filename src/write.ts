@@ -1,5 +1,6 @@
 import type { z } from 'zod'
 import { prefixParamKeys } from './internal.js'
+import { assertStaticPlaceholders } from './placeholders.js'
 import { serializeRow } from './serialize.js'
 import { execWrite } from './transaction.js'
 import type { SqliteAdapter, SqliteRunResult } from './types.js'
@@ -23,6 +24,11 @@ export interface DefineWriteOptions<
   params: ParamsSchema
   /** The SQL statement. Use `$param` named placeholders matching `params` keys. */
   sql: string
+  /**
+   * Bypass the definition-time SQL/params cross-check. See
+   * {@link DefineQueryOptions.skipPlaceholderCheck}.
+   */
+  skipPlaceholderCheck?: boolean
 }
 
 /**
@@ -83,6 +89,7 @@ export function defineWrite<ParamsSchema extends z.ZodObject<z.ZodRawShape>>(
   options: DefineWriteOptions<ParamsSchema>,
 ): WriteHandle<ParamsSchema> {
   const { db, params: paramSchema, sql } = options
+  assertStaticPlaceholders(sql, paramSchema, options.skipPlaceholderCheck)
   const statement = db.prepare(sql)
   const paramPrefix = db.paramPrefix ?? '$'
 

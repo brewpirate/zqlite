@@ -116,6 +116,15 @@ const GATES = [
     command: ['bun', 'run', 'lint'],
   },
   {
+    // Must run before typecheck: the integration tests import the package by
+    // name ('zqlite'), which resolves through the exports map to ./dist. Without
+    // a prior build, dist is absent (fresh checkout) or stale, and the typecheck
+    // fails on those files. Building first makes the typecheck build-independent.
+    name: 'build',
+    describe: 'compile dist (required before the dist-consuming typecheck)',
+    command: ['bun', 'run', 'build'],
+  },
+  {
     name: 'typecheck',
     describe: 'TypeScript typecheck all packages',
     command: ['bun', 'tsc', '--noEmit'],
