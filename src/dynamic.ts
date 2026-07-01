@@ -1,6 +1,7 @@
 import type { z } from 'zod'
 import { QueryValidationError } from './errors.js'
 import { buildRowCoercer, prefixParamKeys } from './internal.js'
+import { assertDynamicPlaceholders } from './placeholders.js'
 import { serializeRow } from './serialize.js'
 import type { SqliteAdapter, SqliteStatement } from './types.js'
 
@@ -48,6 +49,13 @@ export interface DefineDynamicQueryOptions<
    * `'total_tokens DESC'`). Only one entry can be active per query.
    */
   order?: Record<OrderKey, string>
+  /**
+   * Bypass the definition-time SQL/params cross-check. See
+   * {@link DefineQueryOptions.skipPlaceholderCheck}. For dynamic queries the
+   * check validates the union of placeholders across the base SQL and every
+   * `where` / `order` fragment.
+   */
+  skipPlaceholderCheck?: boolean
 }
 
 /**
@@ -130,6 +138,17 @@ export function defineDynamicQuery<
     where = {} as Record<WhereKey, string>,
     order = {} as Record<OrderKey, string>,
   } = options
+  // `Object.values` on a generic `Record<Key, string>` widens to `unknown[]`
+  // (the finite-key Record doesn't match the string-index-signature overload),
+  // so the values are asserted back to their declared `string` element type.
+  const whereFragments = Object.values(where) as string[]
+  const orderFragments = Object.values(order) as string[]
+  assertDynamicPlaceholders(
+    baseSql,
+    [...whereFragments, ...orderFragments],
+    paramSchema,
+    options.skipPlaceholderCheck,
+  )
   const coerceRow = buildRowCoercer(resultSchema)
   const paramPrefix = db.paramPrefix ?? '$'
   const statementCache = new Map<string, SqliteStatement>()
