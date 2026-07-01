@@ -96,9 +96,12 @@ Every one of these runs the same integration suite in CI — `bun:sqlite` and
 22 and 24. (`better-sqlite3` is Node-only; Bun won't load its native addon.
 `libsql` is the one that runs on both.)
 
-`libsql` is local-only for now. Turso cloud — remote or embedded replica — isn't
-supported yet: it's async and zqlite is currently sync all the way through.
-That's on the list, not in the box.
+The four drivers above are **synchronous**. **Turso cloud** — remote over HTTP —
+is reached through the separate **async API** (`defineAsyncQuery`,
+`defineAsyncWrite`, `execWriteAsync`) over
+[`@libsql/client`](https://github.com/tursodatabase/libsql-client-ts). Same
+schema, same validation and coercion — the calls just return Promises. See
+[recipes.md → Async & Turso cloud](./docs/recipes.md#async--turso-cloud).
 
 Wrapper snippets for each driver live in
 [recipes.md → Multiple drivers](./docs/recipes.md#multiple-drivers).
@@ -112,8 +115,11 @@ Wrapper snippets for each driver live in
   the schema instead of sneaking in.
 - **No index generation.** Define your indexes alongside the `zodToSqliteDDL`
   output.
-- **Sync only.** Every driver and every method is synchronous. This is a
-  feature, not a gap — it's also why Turso cloud isn't here yet.
+- **Sync by default, async when you need it.** The four synchronous drivers use
+  the synchronous API (`defineQuery` / `defineWrite` / `execWrite`). Remote Turso
+  cloud uses the parallel async API (`defineAsyncQuery` / `defineAsyncWrite` /
+  `execWriteAsync`) — same core, Promise-returning. There's no single "make
+  everything async" switch; the two surfaces stay separate on purpose.
 
 ## Status
 

@@ -6,3 +6,4 @@ package-lock.json
 .local/
 spikes/
 :memory:*
+.env

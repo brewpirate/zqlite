@@ -1,3 +1,19 @@
+export type {
+  AsyncExecutor,
+  AsyncQueryHandle,
+  AsyncResultSet,
+  AsyncSqliteAdapter,
+  AsyncTransaction,
+  AsyncWriteHandle,
+  AsyncWriteResult,
+  DefineAsyncQueryOptions,
+  DefineAsyncWriteOptions,
+} from './async.js'
+export {
+  defineAsyncQuery,
+  defineAsyncWrite,
+  execWriteAsync,
+} from './async.js'
 export { zSqliteBool } from './bool.js'
 export type { ConfigureZqliteAdapterOpts } from './configure.js'
 export { configureZqliteAdapter } from './configure.js'
