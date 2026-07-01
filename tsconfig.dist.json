@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["tests/integration/node-dist-entry.ts"],
+  "exclude": ["node_modules"]
+}
