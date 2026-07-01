@@ -55,6 +55,14 @@ any time multiple writes must be atomic or writers share the database.
 > **`defineWrite` prepares immediately.** Every table a write references must
 > already exist when you call `defineWrite` — define handles after `migrate`.
 
+> **`$name` placeholders only.** `defineQuery` and `defineWrite` accept only
+> `$name` placeholders, and they cross-check the SQL against the `params` schema
+> at define time — a non-`$name` syntax (`:name`, `@name`, positional `?`) or a
+> `$name` with no matching params key throws `PlaceholderMismatchError` right
+> away, on every driver (a mismatch would otherwise bind `NULL` silently on
+> `bun:sqlite`). If you build SQL in a way the static check can't follow, pass
+> `skipPlaceholderCheck: true` on that handle.
+
 See [`examples/02-writes.ts`](../examples/02-writes.ts).
 
 ## Dynamic queries

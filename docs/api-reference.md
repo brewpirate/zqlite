@@ -22,7 +22,8 @@ binding, result rows after fetching.
 | `db` | `SqliteAdapter` | Database connection |
 | `params` | `z.ZodObject` | Schema for named parameters — must be an object |
 | `result` | `z.ZodType` | Schema for result rows |
-| `sql` | `string` | SQL with `$name` placeholders |
+| `sql` | `string` | SQL with `$name` placeholders (see the placeholder rule below) |
+| `skipPlaceholderCheck` | `boolean` | Opt out of the define-time placeholder check (default `false`) |
 
 Returns `{ one, all, run }`:
 
@@ -30,6 +31,15 @@ Returns `{ one, all, run }`:
 - `.all(params)` → `Result[]`
 - `.run(params)` → `void` (use `defineWrite` instead for writes that don't
   return rows — `.run` here exists for statements you don't read back)
+
+**Placeholder rule.** Only `$name` placeholders are supported, and they are
+cross-checked against the `params` schema at define time. `defineQuery` throws
+`PlaceholderMismatchError` when the SQL uses a non-`$name` syntax (`:name`,
+`@name`, or positional `?`), or when a `$name` placeholder has no matching key
+in `params`. This turns a silent bug — a mismatched name binds `NULL` on
+`bun:sqlite` but throws on `node:sqlite` / `better-sqlite3` — into a uniform,
+eager error on every driver. Pass `skipPlaceholderCheck: true` to disable it for
+one handle (e.g. SQL built in a way the static check can't follow).
 
 Throws `QueryValidationError` when a result row fails validation; for `.all()`
 the error carries the offending row's index.
@@ -45,7 +55,12 @@ writes don't return rows. Both methods return the driver's `SqliteRunResult`.
 |---|---|---|
 | `db` | `SqliteAdapter` | Database connection |
 | `params` | `z.ZodObject` | Schema for named parameters — must be an object |
-| `sql` | `string` | SQL with `$name` placeholders |
+| `sql` | `string` | SQL with `$name` placeholders (same rule as `defineQuery`) |
+| `skipPlaceholderCheck` | `boolean` | Opt out of the define-time placeholder check (default `false`) |
+
+Placeholders follow the same rule as [`defineQuery`](#definequeryoptions): `$name`
+only, cross-checked against `params` at define time, throwing
+`PlaceholderMismatchError` on a non-`$name` syntax or an unmatched name.
 
 Returns `{ run, runInTransaction }`:
 
@@ -331,4 +346,5 @@ try {
 | `ColumnTypeMismatchError` | `migrateAddColumn` | Column exists with a different declared type |
 | `DuplicateMigrationVersionError` | `migrate` | Two migrations share a version |
 | `QueryValidationError` | `defineQuery`, `defineDynamicQuery` | Result row failed validation; carries `sql`, `rowIndex`, `cause` |
+| `PlaceholderMismatchError` | `defineQuery`, `defineWrite` | SQL placeholder doesn't match params at define time — non-`$name` syntax (`:name`/`@name`/`?`) or an unmatched `$name`. Bypass with `skipPlaceholderCheck` |
 | `TransactionRollbackError` | `execWrite`, `.runInTransaction` | Callback **and** `ROLLBACK` failed; DB may be indeterminate |
