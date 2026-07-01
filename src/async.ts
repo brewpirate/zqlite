@@ -1,5 +1,5 @@
 import type { z } from 'zod'
-import { QueryValidationError } from './errors.js'
+import { QueryValidationError, TransactionRollbackError } from './errors.js'
 import { buildRowCoercer, prefixParamKeys } from './internal.js'
 import { assertStaticPlaceholders } from './placeholders.js'
 import { serializeRow } from './serialize.js'
@@ -291,7 +291,11 @@ export function defineAsyncWrite<
  * @param db - The async database connection
  * @param operations - Async work to run atomically; receives the open transaction
  * @returns The value `operations` resolves to
- * @throws Re-throws the callback's error after rolling back
+ * @throws Re-throws the callback's error after a successful rollback. If the
+ *   rollback *itself* rejects — a real risk over a remote client (e.g. the
+ *   network drops mid-rollback) — throws {@link TransactionRollbackError}
+ *   carrying both the original error and the rollback failure, since the
+ *   database may then be in an indeterminate state. Mirrors the sync `execWrite`.
  */
 export async function execWriteAsync<CallbackResult>(
   db: AsyncSqliteAdapter,
@@ -302,8 +306,15 @@ export async function execWriteAsync<CallbackResult>(
     const result = await operations(transaction)
     await transaction.commit()
     return result
-  } catch (error) {
-    await transaction.rollback()
-    throw error
+  } catch (originalError) {
+    // A failed rollback must not mask the original error: if rollback rejects,
+    // surface both (the DB may be in an indeterminate state), never let the
+    // rollback failure propagate alone. Same contract as the sync execWrite.
+    try {
+      await transaction.rollback()
+    } catch (rollbackError) {
+      throw new TransactionRollbackError(originalError, rollbackError)
+    }
+    throw originalError
   }
 }

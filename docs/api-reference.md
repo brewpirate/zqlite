@@ -317,6 +317,12 @@ await execWriteAsync(db, async (tx) => {
 })
 ```
 
+If the rollback *itself* rejects — a real risk over a remote client, e.g. the
+network drops mid-rollback — it throws `TransactionRollbackError` carrying both
+the original error and the rollback failure (the DB may be in an indeterminate
+state), so the rollback failure never silently masks the original. Same contract
+as the sync [`execWrite`](#execwritedb-writeoperations).
+
 Interactive transactions cost one network round-trip per statement; for a batch
 of writes that need no reads between them, the driver's own `batch()` is cheaper.
 
@@ -404,4 +410,4 @@ try {
 | `DuplicateMigrationVersionError` | `migrate` | Two migrations share a version |
 | `QueryValidationError` | `defineQuery`, `defineDynamicQuery` | Result row failed validation; carries `sql`, `rowIndex`, `cause` |
 | `PlaceholderMismatchError` | `defineQuery`, `defineWrite` | SQL placeholder doesn't match params at define time — non-`$name` syntax (`:name`/`@name`/`?`) or an unmatched `$name`. Bypass with `skipPlaceholderCheck` |
-| `TransactionRollbackError` | `execWrite`, `.runInTransaction` | Callback **and** `ROLLBACK` failed; DB may be indeterminate |
+| `TransactionRollbackError` | `execWrite`, `.runInTransaction`, `execWriteAsync` | Callback **and** the rollback failed; DB may be indeterminate |

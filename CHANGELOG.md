@@ -18,8 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   validation, the `$name` placeholder check) — only the one I/O call is awaited.
   Sync and async are separate surfaces: the synchronous drivers keep their
   synchronous API. `execWriteAsync` runs an interactive transaction (commit on
-  success, rollback on throw); write handles accept an optional transaction
-  executor so they compose inside it. See
+  success, rollback on throw; if the rollback itself fails it throws
+  `TransactionRollbackError` carrying both errors, like the sync `execWrite`);
+  write handles accept an optional transaction executor so they compose inside
+  it. Covered by unit tests (local `@libsql/client` file DB, plus a mocked
+  rollback-failure) and a credentialed remote integration test
+  (`tests/async-remote.test.ts`, skipped without `DB_URL`/`DB_TOKEN`). See
   [docs/recipes.md → Async & Turso cloud](./docs/recipes.md#async--turso-cloud).
 - **`libsql` (local) as a tested driver.** Turso's SQLite fork runs the full
   driver-parity suite under both Bun and Node. It needs a thin wrapper —

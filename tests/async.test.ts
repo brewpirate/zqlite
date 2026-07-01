@@ -6,11 +6,13 @@ import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { z } from 'zod'
 import {
   type AsyncSqliteAdapter,
+  type AsyncTransaction,
   createInsertSchema,
   defineAsyncQuery,
   defineAsyncWrite,
   execWriteAsync,
   PlaceholderMismatchError,
+  TransactionRollbackError,
   zJsonSchema,
   zodToSqliteDDL,
 } from '../src/index'
@@ -173,6 +175,40 @@ describe('execWriteAsync', () => {
 
     // The pre-throw write must not survive the rollback.
     expect((await countRows.one({}))?.total).toBe(0)
+  })
+
+  test('surfaces TransactionRollbackError when the rollback itself fails', async () => {
+    // The remote failure the local file DB can never reproduce: rollback()
+    // rejecting (e.g. network drop mid-rollback). A fake adapter forces it. The
+    // original error must NOT be masked by the rollback failure — both surface
+    // via TransactionRollbackError, so the caller knows the DB may be
+    // indeterminate. Mirrors the sync execWrite contract.
+    const originalError = new Error('write failed')
+    const rollbackError = new Error('network dropped during rollback')
+    const brokenTransaction: AsyncTransaction = {
+      execute: async () => ({ rows: [], rowsAffected: 0 }),
+      commit: async () => {},
+      rollback: async () => {
+        throw rollbackError
+      },
+    }
+    const flakyDb: AsyncSqliteAdapter = {
+      execute: async () => ({ rows: [], rowsAffected: 0 }),
+      transaction: async () => brokenTransaction,
+    }
+
+    let caught: unknown
+    try {
+      await execWriteAsync(flakyDb, async () => {
+        throw originalError
+      })
+    } catch (error) {
+      caught = error
+    }
+
+    expect(caught).toBeInstanceOf(TransactionRollbackError)
+    expect((caught as TransactionRollbackError).originalError).toBe(originalError)
+    expect((caught as TransactionRollbackError).rollbackError).toBe(rollbackError)
   })
 })
 
