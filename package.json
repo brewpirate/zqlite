@@ -52,6 +52,7 @@
     "check:all": "tsx scripts/gate.ts"
   },
   "devDependencies": {
+    "@libsql/client": "^0.17.4",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^26.0.1",
     "better-sqlite3": "^12.11.1",

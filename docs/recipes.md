@@ -11,6 +11,7 @@ Task-oriented patterns. Each section links a runnable, type-checked example in
 - [Operation schemas](#operation-schemas)
 - [Migrations](#migrations)
 - [Multiple drivers](#multiple-drivers)
+- [Async & Turso cloud](#async--turso-cloud)
 - [Error handling](#error-handling)
 
 ---
@@ -267,10 +268,63 @@ function adaptLibsql(database: Database): SqliteAdapter {
 const db = adaptLibsql(new Database('app.db'))
 ```
 
-This covers **local** libsql databases. Turso **cloud** — remote access or
-embedded replicas — is not yet supported: remote reads/writes are asynchronous,
-and zqlite is currently sync-only (see the "Sync only" limitation in the
-README).
+This covers **local** libsql databases (synchronous). For Turso **cloud** —
+remote over HTTP — use the async API with `@libsql/client`, below.
+
+## Async & Turso cloud
+
+Remote Turso is asynchronous, so it uses a parallel async surface:
+`defineAsyncQuery`, `defineAsyncWrite`, and `execWriteAsync`. They share the same
+validation core as the sync API — the same schema, the same boolean/Date/JSON
+coercion, the same `$name` placeholder check — the calls just return Promises.
+Pass [`@libsql/client`](https://github.com/tursodatabase/libsql-client-ts)'s
+`Client` directly; it satisfies `AsyncSqliteAdapter` with no wrapper.
+
+```ts
+import { createClient } from '@libsql/client'
+import { defineAsyncQuery, defineAsyncWrite, execWriteAsync } from 'zqlite'
+
+const db = createClient({
+  url: process.env.TURSO_DATABASE_URL, // libsql://<db>.turso.io
+  authToken: process.env.TURSO_AUTH_TOKEN, // a database auth token, not a platform token
+})
+
+const findBook = defineAsyncQuery({
+  db,
+  params: z.object({ book_id: z.string() }),
+  result: BookSchema,
+  sql: 'SELECT * FROM books WHERE book_id = $book_id',
+})
+const book = await findBook.one({ book_id: 'bk_1' }) // Book | null, fully coerced
+
+const lendBook = defineAsyncWrite({
+  db,
+  params: z.object({ book_id: z.string(), borrower: z.string() }),
+  sql: 'UPDATE books SET borrower = $borrower WHERE book_id = $book_id',
+})
+```
+
+**Transactions** use `execWriteAsync`, which opens an interactive transaction and
+passes it to your callback. Run write handles against it via their second
+argument so they're part of the transaction:
+
+```ts
+await execWriteAsync(db, async (tx) => {
+  await lendBook.run({ book_id: 'bk_1', borrower: 'ada' }, tx)
+  await logActivity.run({ detail: 'bk_1 lent to ada' }, tx)
+})
+// both commit together, or both roll back if the callback throws
+```
+
+> **Latency.** Each statement is a network round-trip, so an interactive
+> transaction costs one round-trip per statement (plus begin/commit). When a
+> batch of writes doesn't need to read between them, `@libsql/client`'s own
+> `batch()` sends them in a single round-trip — reach for `execWriteAsync` when
+> you need read-your-writes or conditional logic mid-transaction.
+
+> **`:memory:` caveat.** `@libsql/client` gives each `:memory:` call a fresh
+> connection, so a table created in one call is invisible to the next. Use a
+> `file:` URL locally, or a real `libsql://` URL — both are one logical database.
 
 ## Error handling
 

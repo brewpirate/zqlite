@@ -273,6 +273,63 @@ Use for two or more writes that must be atomic. For a single write, prefer
 
 ---
 
+## Async (Turso cloud)
+
+A parallel surface for drivers whose I/O is asynchronous — chiefly
+`@libsql/client` for remote Turso. Same options and validation as the sync API;
+the methods return Promises. Sync and async are separate — the synchronous
+drivers keep the synchronous API. See
+[recipes.md → Async & Turso cloud](./recipes.md#async--turso-cloud).
+
+### `defineAsyncQuery(options)`
+
+Async counterpart to [`defineQuery`](#definequeryoptions). Same options
+(`db` is an `AsyncSqliteAdapter`, plus `params` / `result` / `sql` /
+`skipPlaceholderCheck`) and the same `$name` placeholder rule. Returns
+`{ one, all }`:
+
+- `.one(params, executor?)` → `Promise<Result | null>`
+- `.all(params, executor?)` → `Promise<Result[]>`
+
+The optional `executor` runs the query inside an open `AsyncTransaction`;
+omitted, it uses the connection the handle was defined with.
+
+### `defineAsyncWrite(options)`
+
+Async counterpart to [`defineWrite`](#definewriteoptions). Returns `{ run }`:
+
+- `.run(params, executor?)` → `Promise<AsyncWriteResult>` (`{ changes, lastInsertRowid }`)
+
+Pass an `executor` (an open `AsyncTransaction`) to enlist the write in a
+transaction — this is how write handles compose with `execWriteAsync`.
+
+### `execWriteAsync(db, operations)`
+
+Async counterpart to [`execWrite`](#execwritedb-writeoperations). Opens an
+interactive transaction (`db.transaction('write')`), passes it to `operations`,
+then commits — or rolls back and re-throws if the callback throws. Run write
+handles against the transaction via their `executor` argument:
+
+```ts
+await execWriteAsync(db, async (tx) => {
+  await writeA.run(paramsA, tx)
+  await writeB.run(paramsB, tx)
+})
+```
+
+Interactive transactions cost one network round-trip per statement; for a batch
+of writes that need no reads between them, the driver's own `batch()` is cheaper.
+
+### `AsyncSqliteAdapter` / `AsyncTransaction` / `AsyncExecutor` / `AsyncResultSet` / `AsyncWriteResult`
+
+The async driver contract. `@libsql/client`'s `Client` satisfies
+`AsyncSqliteAdapter` directly (no wrapper): `execute({ sql, args })` returns a
+result set with `rows` / `rowsAffected` / `lastInsertRowid`, and
+`transaction('write')` returns an `AsyncTransaction` (`execute` + `commit` +
+`rollback`).
+
+---
+
 ## Driver interfaces
 
 ### `SqliteAdapter` / `SqliteStatement` / `SqliteRunResult`

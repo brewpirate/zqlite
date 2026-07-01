@@ -9,13 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Async API for async drivers — Turso cloud support.** New parallel exports
+  `defineAsyncQuery`, `defineAsyncWrite`, and `execWriteAsync`, plus the
+  `AsyncSqliteAdapter` interface, for drivers whose I/O is asynchronous — chiefly
+  [`@libsql/client`](https://github.com/tursodatabase/libsql-client-ts) talking
+  to a **remote Turso** database. They reuse the exact same validation core as
+  the sync API (param serialization, boolean/Date/JSON coercion, result
+  validation, the `$name` placeholder check) — only the one I/O call is awaited.
+  Sync and async are separate surfaces: the synchronous drivers keep their
+  synchronous API. `execWriteAsync` runs an interactive transaction (commit on
+  success, rollback on throw); write handles accept an optional transaction
+  executor so they compose inside it. See
+  [docs/recipes.md → Async & Turso cloud](./docs/recipes.md#async--turso-cloud).
 - **`libsql` (local) as a tested driver.** Turso's SQLite fork runs the full
   driver-parity suite under both Bun and Node. It needs a thin wrapper —
   `paramPrefix: ''` plus a strip of the `_metadata` field libsql injects into
   `.get()` rows (so `.strict()` result schemas work) — documented in
   [docs/recipes.md → Multiple drivers](./docs/recipes.md#multiple-drivers).
-  Local databases only; Turso cloud (remote / embedded replica) is not yet
-  supported because it requires async, and zqlite is currently sync-only.
+  (Remote Turso cloud is reached via the async API above.)
 - **Cross-driver, cross-runtime integration test suite.** `bun:sqlite`,
   `better-sqlite3`, `node:sqlite`, and `libsql` run one shared parity suite in
   CI — `bun:sqlite` and `libsql` under Bun; `better-sqlite3`, `node:sqlite`, and
