@@ -34,6 +34,7 @@
     "lint:fix": "bun x @biomejs/biome lint --fix",
     "lint:error": "bun x @biomejs/biome lint --diagnostic-level=error",
     "fix": "bun run format:fix && bun run lint:fix",
+    "check": "tsc -p tsconfig.json",
     "check:all": "tsx scripts/gate.ts"
   },
   "devDependencies": {
