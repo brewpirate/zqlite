@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { SqliteBindable } from './serialize'
+import type { SqliteBindable } from './serialize.js'
 
 /** Shorthand for Zod 4's base type — the common ground of all schema shapes. */
 type AnyZodType = z.core.$ZodType

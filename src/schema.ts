@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { getJsonColumnSchema, isJsonColumn } from './json'
+import { getJsonColumnSchema, isJsonColumn } from './json.js'
 
 /** Shorthand for Zod 4's base type — the common ground of all schema shapes. */
 type AnyZodType = z.core.$ZodType

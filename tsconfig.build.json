@@ -1,0 +1,22 @@
+
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": [],
+    "noEmit": false,
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": "src",
+
+    // nodenext (not "bundler") so a future extensionless relative import is a
+    // BUILD error, not a silently-broken dist. tsc never rewrites specifiers,
+    // so ESM output must carry explicit .js extensions in source; nodenext
+    // enforces that. "bundler" allows extensionless imports and emits them
+    // verbatim -> ERR_MODULE_NOT_FOUND under Node.
+    "module": "nodenext",
+    "moduleResolution": "nodenext"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "tests", "examples"]
+}
+ 

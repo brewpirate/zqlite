@@ -1,8 +1,13 @@
 # zqlite
 
-Schema-first SQLite for TypeScript. Write a Zod schema once — get the DDL,
-the TypeScript types, and validated queries from it, with no redundancy and no
-ORM.
+<p align="center">
+  <img src="assets/header.png" alt="zqlite" >
+</p>
+
+Schema-first SQLite for TypeScript. Write your Zod schema once and get the table
+definition, the types, and validated queries out of it. You still write the
+SQL — zqlite just makes sure what goes into the database and what comes back both
+line up with your schema.
 
 ```ts
 import { z } from 'zod'
@@ -22,7 +27,7 @@ const ddl = zodToSqliteDDL({
   primaryKey: ['session_id'],
 })
 
-// Type-safe query — params validated in, rows coerced + validated out
+// Params validated going in, rows coerced + validated coming out
 const findSession = defineQuery({
   db,
   params: z.object({ session_id: z.string() }),
@@ -34,67 +39,85 @@ const session = findSession.one({ session_id: 'abc' })
 // session: Session | null — is_active is a real boolean, not 0
 ```
 
-## Why
+## Why bother
 
-SQLite in TypeScript is usually raw `db.prepare(...).get(...)` with `as YourType`
-casts. That works until a column type changes, a boolean comes back as `0`, or a
-JSON field arrives as a string — bugs at the DB boundary are silent and only
-surface at runtime.
+The usual way to talk to SQLite from TypeScript is `db.prepare(...).get(...)`
+with an `as YourType` cast stuck on the end. That's fine right up until it
+isn't: a column changes type, a boolean comes back as `0`, a JSON column shows
+up as a string. The cast swears everything's fine. It isn't, and you find out at
+runtime — usually in production.
 
-zqlite makes the schema the single source of truth:
+zqlite makes the schema the one source of truth. The same Zod object gives you
+the TypeScript types, the `CREATE TABLE`, and the validation on both ends: params
+get checked before they're bound, rows get checked before they're handed back.
+The annoying conversions happen for you — `0`/`1` to `boolean`, ISO strings to
+`Date`, JSON text to parsed objects, and back again.
 
-- **One schema** defines the TypeScript types, the `CREATE TABLE`, and query
-  validation.
-- **Both boundaries validated** — params before binding, rows before returning.
-- **Automatic coercion** — `boolean` ↔ `0`/`1`, `Date` ↔ ISO string, JSON
-  columns ↔ parsed objects.
-- **Not an ORM** — you write the SQL. zqlite owns the type boundary, not the
-  query. No entities, no relations, no query DSL.
+And it's deliberately not an ORM. No entities, no relations, no query builder to
+learn. You write the SQL; zqlite just owns the boundary around it.
 
-## Documentation
+## Docs
 
 | Guide | For |
 |---|---|
-| **[Getting started](./docs/getting-started.md)** | Zero to a working table in 5 minutes |
-| **[Recipes](./docs/recipes.md)** | Task-oriented patterns: writes, dynamic queries, JSON, migrations, drivers |
+| **[Getting started](./docs/getting-started.md)** | Zero to a working table in about five minutes |
+| **[Recipes](./docs/recipes.md)** | The task-by-task stuff: writes, dynamic queries, JSON, migrations, drivers |
 | **[API reference](./docs/api-reference.md)** | Every export, option, and error |
-| **[Examples](./examples)** | Runnable, progressively numbered (`bun examples/01-quickstart.ts`) |
+| **[Examples](./examples)** | Runnable and numbered — `bun examples/01-quickstart.ts` |
 
 ## Install
 
-```bash
-# Bun (recommended — bun:sqlite is built in)
-bun add zqlite zod
+Quick heads-up: it's not on npm yet — the first release is close. Until then it's
+source-only, so clone the repo or pin it from git if you want to try it. Once
+it's published the commands will be the boring ones you'd expect:
 
-# Node, with better-sqlite3
-npm install zqlite zod better-sqlite3
+```bash
+bun add zqlite zod                       # Bun — bun:sqlite is built in
+npm install zqlite zod better-sqlite3    # Node
 ```
 
-Requires a supported SQLite driver and [Zod](https://zod.dev) ^4 (peer
-dependency).
+You'll need a SQLite driver (see below) and [Zod](https://zod.dev) 4 — it's a
+peer dependency.
 
 ## Drivers
 
+zqlite isn't tied to one driver. Anything that satisfies the `SqliteAdapter`
+shape works; here's what's tested:
+
 | Driver | Status | Notes |
 |---|---|---|
-| [`bun:sqlite`](https://bun.sh/docs/api/sqlite) | **Tested** | Pass `new Database(path)` directly |
-| [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3) | Compatible | Set `paramPrefix: ''` on the connection |
-| `node:sqlite` (Node 22+) | Compatible | Needs a thin wrapper (no `.transaction()`) |
+| [`bun:sqlite`](https://bun.sh/docs/api/sqlite) | **Tested** | Pass `new Database(path)` straight in |
+| [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3) | **Tested** | Set `paramPrefix: ''` on the connection |
+| [`node:sqlite`](https://nodejs.org/docs/latest/api/sqlite.html) (Node 22+) | **Tested** | Thin wrapper — it has no `.transaction()` |
+| [`libsql`](https://github.com/tursodatabase/libsql) (local) | **Tested** | Thin wrapper — `paramPrefix: ''` and strip its `_metadata` field; runs on Bun and Node |
 
-Driver setup details are in
+Every one of these runs the same integration suite in CI — `bun:sqlite` and
+`libsql` under Bun, and `better-sqlite3`, `node:sqlite`, and `libsql` under Node
+22 and 24. (`better-sqlite3` is Node-only; Bun won't load its native addon.
+`libsql` is the one that runs on both.)
+
+`libsql` is local-only for now. Turso cloud — remote or embedded replica — isn't
+supported yet: it's async and zqlite is currently sync all the way through.
+That's on the list, not in the box.
+
+Wrapper snippets for each driver live in
 [recipes.md → Multiple drivers](./docs/recipes.md#multiple-drivers).
 
-## Limitations
+## What it doesn't do
 
-- **Named params only** — SQL uses `$name` placeholders; positional `?` is not
-  supported.
-- **Flat schemas** — `ZodObject` / `ZodArray` fields must use `zJsonSchema`;
-  nested schemas are not auto-flattened.
-- **No index generation** — define indexes alongside `zodToSqliteDDL` output.
-- **Sync only** — all supported drivers and all methods are synchronous.
+- **Named params only.** SQL uses `$name` placeholders. Positional `?` isn't
+  supported, and zqlite will tell you at define time if you reach for it.
+- **Flat schemas.** Nested `ZodObject` / `ZodArray` fields need `zJsonSchema` —
+  they aren't auto-flattened. That's on purpose, so JSON columns are visible in
+  the schema instead of sneaking in.
+- **No index generation.** Define your indexes alongside the `zodToSqliteDDL`
+  output.
+- **Sync only.** Every driver and every method is synchronous. This is a
+  feature, not a gap — it's also why Turso cloud isn't here yet.
 
 ## Status
 
-zqlite is currently developed inside the `command-center` monorepo. The API is
-stable in practice but predates a formal release; pin to a commit if you depend
-on it externally.
+Pre-1.0, and not on npm just yet — but it's not vaporware. The API's stable, and
+the whole thing runs a cross-driver suite in CI on every push (four drivers, two
+runtimes), so it's safe to build on. Pin a version once it's published. Anything
+that breaks between versions gets written down in [CHANGELOG.md](./CHANGELOG.md).

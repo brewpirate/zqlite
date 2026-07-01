@@ -4,7 +4,7 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "types": [
-      "bun"
+      "bun-types"
     ],
     "lib": [
       "ESNext"
@@ -25,9 +25,11 @@
   },
   "include": [
     "src/**/*.ts",
+    "tests/**/*.ts",
     "examples/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "tests/integration/node-dist-entry.ts"
   ]
 }

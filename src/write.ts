@@ -1,8 +1,9 @@
 import type { z } from 'zod'
-import { prefixParamKeys } from './internal'
-import { serializeRow } from './serialize'
-import { execWrite } from './transaction'
-import type { SqliteAdapter, SqliteRunResult } from './types'
+import { prefixParamKeys } from './internal.js'
+import { assertStaticPlaceholders } from './placeholders.js'
+import { serializeRow } from './serialize.js'
+import { execWrite } from './transaction.js'
+import type { SqliteAdapter, SqliteRunResult } from './types.js'
 
 /**
  * Options for {@link defineWrite}. Mirrors `DefineQueryOptions` but omits the
@@ -23,6 +24,11 @@ export interface DefineWriteOptions<
   params: ParamsSchema
   /** The SQL statement. Use `$param` named placeholders matching `params` keys. */
   sql: string
+  /**
+   * Bypass the definition-time SQL/params cross-check. See
+   * {@link DefineQueryOptions.skipPlaceholderCheck}.
+   */
+  skipPlaceholderCheck?: boolean
 }
 
 /**
@@ -83,9 +89,16 @@ export function defineWrite<ParamsSchema extends z.ZodObject<z.ZodRawShape>>(
   options: DefineWriteOptions<ParamsSchema>,
 ): WriteHandle<ParamsSchema> {
   const { db, params: paramSchema, sql } = options
+  assertStaticPlaceholders(sql, paramSchema, options.skipPlaceholderCheck)
   const statement = db.prepare(sql)
   const paramPrefix = db.paramPrefix ?? '$'
 
+  /**
+   * Validates and serializes params, then executes the statement once and
+   * returns the driver-reported result. Shared by `.run` (bare) and
+   * `.runInTransaction` (wrapped in `execWrite`) so the bind-and-execute path
+   * is defined in exactly one place.
+   */
   function executeRun(params: z.infer<ParamsSchema>): WriteResult {
     const parsed = paramSchema.parse(params) as Record<string, unknown>
     const serialized = prefixParamKeys(serializeRow(parsed), paramPrefix)

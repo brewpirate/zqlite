@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Runs the single repo-wide gate (scripts/gate.mjs via `check:all`) so commits
+# land green. The gate spans root src/ AND every workspace package — types,
+# Biome, JSDoc/sync/dispatch checks, and the full test suites. Mirrors
+# .github/workflows/lint_test.yml, which runs the same `check:all`.
+set -euo pipefail
+
+bun check:all

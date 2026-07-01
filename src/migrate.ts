@@ -4,9 +4,9 @@ import {
   InvalidColumnDefinitionError,
   InvalidIdentifierError,
   MissingTableError,
-} from './errors'
-import { VALID_IDENTIFIER } from './identifiers'
-import type { SqliteAdapter } from './types'
+} from './errors.js'
+import { VALID_IDENTIFIER } from './identifiers.js'
+import type { SqliteAdapter } from './types.js'
 
 /**
  * Step inside a mixed-form {@link Migration.up} array. Each entry is either
@@ -83,9 +83,12 @@ export function migrate(db: SqliteAdapter, migrations: Migration[]): void {
     if (migration.version <= current) continue
     db.transaction(() => {
       applyMigrationBody(db, migration.up)
-      db.prepare('INSERT INTO schema_version (version) VALUES ($version)').run({
-        $version: migration.version,
-      })
+      // Positional `?` binds identically across bun:sqlite, better-sqlite3,
+      // and node:sqlite — unlike a named `$version`, which would need the
+      // driver's paramPrefix and silently break under better-sqlite3.
+      db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(
+        migration.version,
+      )
     })()
   }
 }

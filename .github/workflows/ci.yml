@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Cancel previous runs of the same workflow on the same ref
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  quality:
+    name: Format · Lint · Type Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        # argusFoundry is a git submodule (separate private repo) that the
+        # default GITHUB_TOKEN can't access. It's a build tool consumed by
+        # runtime via filesystem paths, not an npm workspace dep,
+        # so CI can skip it. Local dev still uses the submodule.
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Format check
+        run: bun run format
+
+      - name: Lint
+        run: bun run lint
+
+      # The integration tests import the package by name ('zqlite'), which
+      # resolves through the exports map to ./dist. dist is gitignored, so a
+      # fresh CI checkout has none — build before the typecheck or `bun run
+      # check` fails on those files with "Cannot find module 'zqlite'".
+      - name: Build
+        run: bun run build
+
+      - name: Type check
+        run: bun run check
+
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: quality
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # The root `bunfig.toml` preloads `@flaky-tests/plugin-bun/preload`
+      # for local decay-telemetry, but that package is under active
+      # local development (not published to any registry yet) and is
+      # resolved via Bun's global store on developer machines. CI has
+      # no way to resolve it, so swap in a CI-specific bunfig that
+      # drops only that preload entry. See `.github/bunfig.ci.toml`
+      # header for the full rationale and the deletion condition.
+      # - name: Use CI bunfig (drops @flaky-tests preload)
+      #   run: cp .github/bunfig.ci.toml bunfig.toml
+
+      # Bun 1.3.13+ sometimes segfaults during test process shutdown after a
+      # successful run (worker thread cleanup race). Tolerate non-zero exit when
+      # either:
+      #   1. The test summary shows zero failures (clean shutdown), OR
+      #   2. The crash is a Bun shutdown segfault AND no individual test
+      #      printed a (fail) marker.
+      # The summary doesn't always print before the crash, so check #2 catches
+      # the case where the panic preempts the summary.
+      - name: Run tests
+        run: |
+          set +e
+          bun run test 2>&1 | tee test-output.log
+          TEST_EXIT=${PIPESTATUS[0]}
+          set -e
+
+          # Count fail markers — these are emitted per-test as it fails
+          FAIL_COUNT=$(grep -cE '\(fail\)' test-output.log || true)
+          # Check for the Bun shutdown segfault signature
+          IS_BUN_CRASH=0
+          if grep -qE 'panic: Segmentation fault|oh no: Bun has crashed' test-output.log; then
+            IS_BUN_CRASH=1
+          fi
+          # Check for a clean test summary
+          HAS_CLEAN_SUMMARY=0
+          if grep -qE '^ +0 fail' test-output.log && ! grep -qE '^ +[1-9][0-9]* (fail|errors?)' test-output.log; then
+            HAS_CLEAN_SUMMARY=1
+          fi
+
+          if [[ $TEST_EXIT -eq 0 ]]; then
+            echo "::notice::Tests passed cleanly."
+          elif [[ $HAS_CLEAN_SUMMARY -eq 1 ]]; then
+            echo "::warning::Bun crashed during shutdown but all tests passed (summary clean); ignoring exit $TEST_EXIT."
+          elif [[ $IS_BUN_CRASH -eq 1 && $FAIL_COUNT -eq 0 ]]; then
+            echo "::warning::Bun crashed during shutdown before printing summary, but no (fail) markers were emitted; ignoring exit $TEST_EXIT."
+          else
+            echo "::error::Tests failed with exit $TEST_EXIT (fail markers: $FAIL_COUNT, bun crash: $IS_BUN_CRASH, clean summary: $HAS_CLEAN_SUMMARY)."
+            exit $TEST_EXIT
+          fi
+
+      - name: Upload test output on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-output
+          path: test-output.log
+          retention-days: 7

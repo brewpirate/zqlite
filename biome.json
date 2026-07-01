@@ -1,0 +1,114 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "assist": {
+    "actions": {
+      "source": {
+        "noDuplicateClasses": "on",
+        "organizeImports": "on"
+      }
+    },
+    "enabled": true
+  },
+  "files": {
+    "includes": [
+      "**"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "asNeeded"
+    }
+  },
+  "css": {
+    "parser": {
+      "cssModules": false,
+      "tailwindDirectives": true
+    }
+  },
+  "json": {
+    "formatter": {
+      "enabled": false
+    },
+    "linter": {
+      "enabled": false
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "complexity": {
+        "noUselessTernary": "error",
+        "noUselessTypeConstraint": "error",
+        "noExcessiveNestedTestSuites": "error",
+        "useSimplifiedLogicExpression": "error",
+        "noImplicitCoercions": "error",
+        "noUselessStringConcat": "error",
+        "useMaxParams": "error"
+      },
+      "recommended": true,
+      "suspicious": {
+        "noConsole": "warn",
+        "noUnknownAtRules": "error",
+        "useAwait": "error"
+      },
+      "style": {
+        "noNestedTernary": "error",
+        "useNodejsImportProtocol": "off",
+        "useNumericSeparators": "error",
+        "useThrowOnlyError": "error",
+        "noProcessEnv": "error",
+        "useThrowNewError": "error"
+      },
+      "nursery": {
+        "useSortedClasses": "error",
+        "noFloatingPromises": "error",
+        "useExhaustiveSwitchCases": "error",
+        "useExplicitType": "error"
+      },
+      "performance": {
+        "noReExportAll": "error"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": [
+        "tests/**"
+      ],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "off"
+          },
+          "nursery": {
+            "useExplicitType": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "examples/**"
+      ],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "off"
+          }
+        }
+      }
+    }
+  ],
+  "vcs": {
+    "clientKind": "git",
+    "defaultBranch": "main",
+    "enabled": true,
+    "useIgnoreFile": true
+  }
+}

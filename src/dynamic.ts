@@ -1,8 +1,9 @@
 import type { z } from 'zod'
-import { QueryValidationError } from './errors'
-import { buildRowCoercer, prefixParamKeys } from './internal'
-import { serializeRow } from './serialize'
-import type { SqliteAdapter, SqliteStatement } from './types'
+import { QueryValidationError } from './errors.js'
+import { buildRowCoercer, prefixParamKeys } from './internal.js'
+import { assertDynamicPlaceholders } from './placeholders.js'
+import { serializeRow } from './serialize.js'
+import type { SqliteAdapter, SqliteStatement } from './types.js'
 
 /**
  * Options for {@link defineDynamicQuery}. Composes a base SELECT with
@@ -48,6 +49,13 @@ export interface DefineDynamicQueryOptions<
    * `'total_tokens DESC'`). Only one entry can be active per query.
    */
   order?: Record<OrderKey, string>
+  /**
+   * Bypass the definition-time SQL/params cross-check. See
+   * {@link DefineQueryOptions.skipPlaceholderCheck}. For dynamic queries the
+   * check validates the union of placeholders across the base SQL and every
+   * `where` / `order` fragment.
+   */
+  skipPlaceholderCheck?: boolean
 }
 
 /**
@@ -130,10 +138,27 @@ export function defineDynamicQuery<
     where = {} as Record<WhereKey, string>,
     order = {} as Record<OrderKey, string>,
   } = options
+  // `Object.values` on a generic `Record<Key, string>` widens to `unknown[]`
+  // (the finite-key Record doesn't match the string-index-signature overload),
+  // so the values are asserted back to their declared `string` element type.
+  const whereFragments = Object.values(where) as string[]
+  const orderFragments = Object.values(order) as string[]
+  assertDynamicPlaceholders(
+    baseSql,
+    [...whereFragments, ...orderFragments],
+    paramSchema,
+    options.skipPlaceholderCheck,
+  )
   const coerceRow = buildRowCoercer(resultSchema)
   const paramPrefix = db.paramPrefix ?? '$'
   const statementCache = new Map<string, SqliteStatement>()
 
+  /**
+   * Returns the prepared statement for a given `(where, orderBy)` shape,
+   * compiling it on first use and caching by the sorted fragment signature.
+   * Composition is deferred to call time rather than done up front so each
+   * distinct fragment combination pays the `db.prepare()` cost exactly once.
+   */
   function getStatement(
     activeWhere: readonly WhereKey[],
     orderBy: OrderKey | undefined,
@@ -156,6 +181,11 @@ export function defineDynamicQuery<
     return statement
   }
 
+  /**
+   * Coerces then Zod-validates a single result row, wrapping any validation
+   * failure in a {@link QueryValidationError} that carries the base SQL and
+   * the row index so a corrupt row in an `.all()` result is easy to locate.
+   */
   function parseResult(row: unknown, rowIndex?: number): z.infer<ResultSchema> {
     const coerced = coerceRow(row as Record<string, unknown>)
     try {
@@ -165,6 +195,11 @@ export function defineDynamicQuery<
     }
   }
 
+  /**
+   * Validates raw params against the params schema, serializes them to
+   * SQLite-bindable primitives, then applies the driver's param-key prefix so
+   * the result is ready to pass straight to a statement's `.get()` / `.all()`.
+   */
   function bind(
     rawParams: z.infer<ParamsSchema>,
   ): Record<string, ReturnType<typeof serializeRow>[string]> {
@@ -179,11 +214,13 @@ export function defineDynamicQuery<
   }
 
   return {
+    /** Fetches a single row, or `null` if no row matches. */
     one: (opts: CallOpts): z.infer<ResultSchema> | null => {
       const statement = getStatement(opts.where ?? [], opts.orderBy)
       const row = statement.get(bind(opts.params))
       return row ? parseResult(row) : null
     },
+    /** Fetches all matching rows. Returns an empty array if none match. */
     all: (opts: CallOpts): z.infer<ResultSchema>[] => {
       const statement = getStatement(opts.where ?? [], opts.orderBy)
       const rows = statement.all(bind(opts.params))
